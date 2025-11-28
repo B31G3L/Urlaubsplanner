@@ -11,8 +11,8 @@ class DialogManager {
   /**
    * Zeigt Stammdaten Hinzufügen Dialog
    */
-  zeigeStammdatenHinzufuegen(callback) {
-    const abteilungen = this.dataManager.getAlleAbteilungen();
+  async zeigeStammdatenHinzufuegen(callback) {
+    const abteilungen = await this.dataManager.getAlleAbteilungen();
 
     const modalHtml = `
       <div class="modal fade" id="stammdatenModal" tabindex="-1">
@@ -82,7 +82,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('stammdatenForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -100,14 +100,14 @@ class DialogManager {
       };
 
       const mitarbeiterId = document.getElementById('mitarbeiterId').value;
-      const erfolg = this.dataManager.stammdatenHinzufuegen(mitarbeiterId, daten);
 
-      if (erfolg) {
+      try {
+        await this.dataManager.stammdatenHinzufuegen(mitarbeiterId, daten);
         showNotification('Erfolg', `${daten.vorname} ${daten.nachname} wurde hinzugefügt!`, 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Mitarbeiter konnte nicht hinzugefügt werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -115,22 +115,25 @@ class DialogManager {
     // Heutiges Datum als Standard
     const heute = new Date().toISOString().split('T')[0];
     setTimeout(() => {
-      document.getElementById('einstellungsdatum').value = heute;
+      const einstellungsdatumField = document.getElementById('einstellungsdatum');
+      if (einstellungsdatumField) {
+        einstellungsdatumField.value = heute;
+      }
     }, 100);
   }
 
   /**
    * Zeigt Stammdaten Bearbeiten Dialog
    */
-  zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
-    const mitarbeiter = this.dataManager.getMitarbeiter(mitarbeiterId);
+  async zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
+    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
 
     if (!mitarbeiter) {
       showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
       return;
     }
 
-    const abteilungen = this.dataManager.getAlleAbteilungen();
+    const abteilungen = await this.dataManager.getAlleAbteilungen();
 
     const modalHtml = `
       <div class="modal fade" id="stammdatenBearbeitenModal" tabindex="-1">
@@ -206,7 +209,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('stammdatenBearbeitenForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -224,14 +227,13 @@ class DialogManager {
         austrittsdatum: document.getElementById('austrittsdatum').value || null
       };
 
-      const erfolg = this.dataManager.stammdatenAktualisieren(mitarbeiterId, daten);
-
-      if (erfolg) {
+      try {
+        await this.dataManager.stammdatenAktualisieren(mitarbeiterId, daten);
         showNotification('Erfolg', `${daten.vorname} ${daten.nachname} wurde aktualisiert!`, 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Mitarbeiter konnte nicht aktualisiert werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -240,8 +242,8 @@ class DialogManager {
   /**
    * Zeigt Mitarbeiter-Verwaltungs-Modal
    */
-  zeigeStammdatenVerwalten(callback) {
-    const mitarbeiter = this.dataManager.getAlleMitarbeiter();
+  async zeigeStammdatenVerwalten(callback) {
+    const mitarbeiter = await this.dataManager.getAlleMitarbeiter();
 
     const mitarbeiterRows = mitarbeiter.map((ma, index) => `
       <tr>
@@ -320,7 +322,7 @@ class DialogManager {
     // Event-Listener für Bearbeiten und Löschen
     const tabelleBody = modalElement.querySelector('#verwaltungTabelleBody');
 
-    tabelleBody.addEventListener('click', (e) => {
+    tabelleBody.addEventListener('click', async (e) => {
       const bearbeitenBtn = e.target.closest('.btn-bearbeiten');
       const loeschenBtn = e.target.closest('.btn-loeschen');
 
@@ -329,8 +331,8 @@ class DialogManager {
         modal.hide();
 
         // Bearbeiten-Dialog öffnen
-        this.zeigeStammdatenBearbeiten(mitarbeiterId, () => {
-          if (callback) callback();
+        await this.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
+          if (callback) await callback();
           // Verwaltungs-Modal wieder öffnen nach Bearbeitung
           setTimeout(() => this.zeigeStammdatenVerwalten(callback), 300);
         });
@@ -339,14 +341,13 @@ class DialogManager {
         const mitarbeiterData = mitarbeiter.find(m => m.id === mitarbeiterId);
 
         if (confirm(`Möchten Sie den Mitarbeiter ${mitarbeiterData.vorname} ${mitarbeiterData.nachname} wirklich deaktivieren?`)) {
-          const erfolg = this.dataManager.mitarbeiterDeaktivieren(mitarbeiterId);
-
-          if (erfolg) {
+          try {
+            await this.dataManager.mitarbeiterDeaktivieren(mitarbeiterId);
             showNotification('Erfolg', 'Mitarbeiter wurde deaktiviert', 'success');
             modal.hide();
-            if (callback) callback();
-          } else {
-            showNotification('Fehler', 'Mitarbeiter konnte nicht deaktiviert werden', 'danger');
+            if (callback) await callback();
+          } catch (error) {
+            showNotification('Fehler', error.message, 'danger');
           }
         }
       }
@@ -364,7 +365,7 @@ class DialogManager {
   /**
    * Zeigt Urlaub Eintragen Dialog
    */
-  zeigeUrlaubDialog(mitarbeiterId, callback) {
+  async zeigeUrlaubDialog(mitarbeiterId, callback) {
     const modalHtml = `
       <div class="modal fade" id="urlaubModal" tabindex="-1">
         <div class="modal-dialog">
@@ -404,7 +405,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('urlaubForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -419,14 +420,13 @@ class DialogManager {
         beschreibung: document.getElementById('notiz').value || null
       };
 
-      const erfolg = this.dataManager.speichereEintrag(eintrag);
-
-      if (erfolg) {
+      try {
+        await this.dataManager.speichereEintrag(eintrag);
         showNotification('Erfolg', 'Urlaub wurde eingetragen', 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Urlaub konnte nicht eingetragen werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -435,7 +435,7 @@ class DialogManager {
   /**
    * Zeigt Krankheit Eintragen Dialog
    */
-  zeigeKrankDialog(mitarbeiterId, callback) {
+  async zeigeKrankDialog(mitarbeiterId, callback) {
     const modalHtml = `
       <div class="modal fade" id="krankModal" tabindex="-1">
         <div class="modal-dialog">
@@ -475,7 +475,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('krankForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -490,14 +490,13 @@ class DialogManager {
         beschreibung: document.getElementById('notiz').value || null
       };
 
-      const erfolg = this.dataManager.speichereEintrag(eintrag);
-
-      if (erfolg) {
+      try {
+        await this.dataManager.speichereEintrag(eintrag);
         showNotification('Erfolg', 'Krankheit wurde eingetragen', 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Krankheit konnte nicht eingetragen werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -506,7 +505,7 @@ class DialogManager {
   /**
    * Zeigt Schulung Eintragen Dialog
    */
-  zeigeSchulungDialog(mitarbeiterId, callback) {
+  async zeigeSchulungDialog(mitarbeiterId, callback) {
     const modalHtml = `
       <div class="modal fade" id="schulungModal" tabindex="-1">
         <div class="modal-dialog">
@@ -551,7 +550,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('schulungForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -567,14 +566,13 @@ class DialogManager {
         beschreibung: document.getElementById('notiz').value || null
       };
 
-      const erfolg = this.dataManager.speichereEintrag(eintrag);
-
-      if (erfolg) {
+      try {
+        await this.dataManager.speichereEintrag(eintrag);
         showNotification('Erfolg', 'Schulung wurde eingetragen', 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Schulung konnte nicht eingetragen werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -583,7 +581,7 @@ class DialogManager {
   /**
    * Zeigt Überstunden Eintragen Dialog
    */
-  zeigeUeberstundenDialog(mitarbeiterId, callback) {
+  async zeigeUeberstundenDialog(mitarbeiterId, callback) {
     const modalHtml = `
       <div class="modal fade" id="ueberstundenModal" tabindex="-1">
         <div class="modal-dialog">
@@ -624,7 +622,7 @@ class DialogManager {
       </div>
     `;
 
-    this.showModal(modalHtml, () => {
+    await this.showModal(modalHtml, async () => {
       const form = document.getElementById('ueberstundenForm');
       if (!form.checkValidity()) {
         form.reportValidity();
@@ -639,14 +637,13 @@ class DialogManager {
         beschreibung: document.getElementById('notiz').value || null
       };
 
-      const erfolg = this.dataManager.speichereEintrag(eintrag);
-
-      if (erfolg) {
+      try {
+        await this.dataManager.speichereEintrag(eintrag);
         showNotification('Erfolg', 'Überstunden wurden eingetragen', 'success');
-        if (callback) callback();
+        if (callback) await callback();
         return true;
-      } else {
-        showNotification('Fehler', 'Überstunden konnten nicht eingetragen werden', 'danger');
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
         return false;
       }
     });
@@ -655,7 +652,7 @@ class DialogManager {
   /**
    * Hilfsfunktion: Zeigt Modal an
    */
-  showModal(html, onSave) {
+  async showModal(html, onSave) {
     // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
     oldModals.forEach(m => m.remove());
@@ -670,8 +667,8 @@ class DialogManager {
     // Speichern-Button
     const btnSpeichern = modalElement.querySelector('#btnSpeichern');
     if (btnSpeichern && onSave) {
-      btnSpeichern.addEventListener('click', () => {
-        if (onSave()) {
+      btnSpeichern.addEventListener('click', async () => {
+        if (await onSave()) {
           modal.hide();
         }
       });
