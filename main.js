@@ -1,13 +1,187 @@
 /**
  * Teamplanner - Electron Main Process
- * Verwaltet Fenster, IPC und Systemintegration
+ * Verwaltet Fenster, IPC, Datenbank und Systemintegration
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const Database = require('better-sqlite3');
 
 let mainWindow;
+let db;
+
+/**
+ * Initialisiert die Datenbank
+ */
+function initDatabase() {
+  const userDataPath = app.getPath('userData');
+  const dbPath = path.join(userDataPath, 'teamplanner_v3.db');
+
+  console.log('📂 Datenbank-Pfad:', dbPath);
+
+  // Verzeichnis erstellen falls nicht vorhanden
+  if (!fs.existsSync(userDataPath)) {
+    fs.mkdirSync(userDataPath, { recursive: true });
+  }
+
+  // Datenbank öffnen
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  // Tabellen erstellen
+  createTables();
+
+  console.log('✅ Datenbank initialisiert');
+}
+
+/**
+ * Erstellt alle Tabellen
+ */
+function createTables() {
+  // Abteilungen
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS abteilungen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      farbe TEXT NOT NULL DEFAULT '#1f538d',
+      beschreibung TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Mitarbeiter
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mitarbeiter (
+      id TEXT PRIMARY KEY,
+      abteilung_id INTEGER NOT NULL,
+      vorname TEXT NOT NULL,
+      nachname TEXT NOT NULL,
+      email TEXT,
+      geburtsdatum DATE,
+      eintrittsdatum DATE NOT NULL,
+      austrittsdatum DATE,
+      urlaubstage_jahr REAL NOT NULL DEFAULT 30,
+      status TEXT NOT NULL DEFAULT 'AKTIV',
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (abteilung_id) REFERENCES abteilungen(id)
+    )
+  `);
+
+  // Urlaub
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS urlaub (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mitarbeiter_id TEXT NOT NULL,
+      von_datum DATE NOT NULL,
+      bis_datum DATE NOT NULL,
+      tage REAL NOT NULL,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Krankheit
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS krankheit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mitarbeiter_id TEXT NOT NULL,
+      von_datum DATE NOT NULL,
+      bis_datum DATE NOT NULL,
+      tage REAL NOT NULL,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Schulung
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schulung (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mitarbeiter_id TEXT NOT NULL,
+      datum DATE NOT NULL,
+      dauer_tage REAL NOT NULL,
+      titel TEXT,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Überstunden
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ueberstunden (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mitarbeiter_id TEXT NOT NULL,
+      datum DATE NOT NULL,
+      stunden REAL NOT NULL,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Feiertage
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS feiertage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      datum DATE NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      beschreibung TEXT,
+      bundesland TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Veranstaltungen
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS veranstaltungen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      von_datum DATE NOT NULL,
+      bis_datum DATE NOT NULL,
+      titel TEXT NOT NULL,
+      beschreibung TEXT,
+      typ TEXT DEFAULT 'SONSTIGES',
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Standard-Abteilungen erstellen
+  createDefaultDepartments();
+}
+
+/**
+ * Erstellt Standard-Abteilungen
+ */
+function createDefaultDepartments() {
+  const count = db.prepare('SELECT COUNT(*) as count FROM abteilungen').get();
+
+  if (count.count === 0) {
+    const stmt = db.prepare(`
+      INSERT INTO abteilungen (name, farbe, beschreibung)
+      VALUES (?, ?, ?)
+    `);
+
+    const departments = [
+      ['Werkstatt', '#dc3545', 'Werkstatt-Team'],
+      ['Büro', '#1f538d', 'Büro-Team'],
+      ['Lager', '#28a745', 'Lager-Team']
+    ];
+
+    const insert = db.transaction((depts) => {
+      for (const dept of depts) {
+        stmt.run(...dept);
+      }
+    });
+
+    insert(departments);
+    console.log('✅ Standard-Abteilungen erstellt');
+  }
+}
 
 /**
  * Erstellt das Hauptfenster
@@ -25,7 +199,7 @@ function createWindow() {
     },
     icon: path.join(__dirname, 'src/assets/logo.png'),
     backgroundColor: '#1a1a1a',
-    show: false // Erst zeigen wenn geladen
+    show: false
   });
 
   // HTML laden
@@ -51,6 +225,10 @@ function createWindow() {
  * App-Lifecycle Events
  */
 app.whenReady().then(() => {
+  // Datenbank initialisieren
+  initDatabase();
+
+  // Fenster erstellen
   createWindow();
 
   // macOS: Fenster neu erstellen wenn aktiviert
@@ -63,28 +241,27 @@ app.whenReady().then(() => {
 
 // Alle Fenster geschlossen
 app.on('window-all-closed', () => {
+  if (db) {
+    db.close();
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 /**
- * IPC Handlers
+ * IPC Handlers - Datei-Dialoge
  */
-
-// Datei-Dialog für Export
 ipcMain.handle('dialog:saveFile', async (event, options) => {
   const result = await dialog.showSaveDialog(mainWindow, options);
   return result;
 });
 
-// Datei-Dialog für Import
 ipcMain.handle('dialog:openFile', async (event, options) => {
   const result = await dialog.showOpenDialog(mainWindow, options);
   return result;
 });
 
-// Datei schreiben (für Export)
 ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
   try {
     fs.writeFileSync(filePath, data, 'utf8');
@@ -94,14 +271,61 @@ ipcMain.handle('fs:writeFile', async (event, filePath, data) => {
   }
 });
 
-// App-Pfad abrufen
+/**
+ * IPC Handlers - App-Info
+ */
 ipcMain.handle('app:getPath', async (event, name) => {
   return app.getPath(name);
 });
 
-// App-Version abrufen
 ipcMain.handle('app:getVersion', async () => {
   return app.getVersion();
+});
+
+/**
+ * IPC Handlers - Datenbank-Queries
+ */
+ipcMain.handle('db:query', async (event, sql, params = []) => {
+  try {
+    const stmt = db.prepare(sql);
+    const result = stmt.all(...params);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('DB Query Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db:get', async (event, sql, params = []) => {
+  try {
+    const stmt = db.prepare(sql);
+    const result = stmt.get(...params);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('DB Get Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db:run', async (event, sql, params = []) => {
+  try {
+    const stmt = db.prepare(sql);
+    const result = stmt.run(...params);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('DB Run Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db:exec', async (event, sql) => {
+  try {
+    db.exec(sql);
+    return { success: true };
+  } catch (error) {
+    console.error('DB Exec Error:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 /**

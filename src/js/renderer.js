@@ -12,7 +12,7 @@ let dialogManager;
 /**
  * App initialisieren
  */
-function initApp() {
+async function initApp() {
   console.log('🚀 Teamplanner wird gestartet...');
 
   try {
@@ -33,16 +33,16 @@ function initApp() {
     console.log('✅ Dialog Manager initialisiert');
 
     // UI initialisieren
-    initUI();
+    await initUI();
 
     // Initiale Daten laden
-    loadData();
+    await loadData();
 
     console.log('✅ Teamplanner erfolgreich gestartet');
 
     // Willkommens-Notification
-    setTimeout(() => {
-      const info = database.getDatabaseInfo();
+    setTimeout(async () => {
+      const info = await database.getDatabaseInfo();
       showNotification(
         'Teamplanner geladen',
         `Jahr: ${dataManager.aktuellesJahr} | Mitarbeiter: ${info.tables.mitarbeiter}`,
@@ -52,17 +52,17 @@ function initApp() {
 
   } catch (error) {
     console.error('❌ Fehler beim Starten:', error);
-    alert(`Fehler beim Starten: ${error.message}`);
+    showNotification('Fehler', `Fehler beim Starten: ${error.message}`, 'danger');
   }
 }
 
 /**
  * UI initialisieren (Event Listener, etc.)
  */
-function initUI() {
+async function initUI() {
   // Jahr-Auswahl
   const jahrSelect = document.getElementById('jahrSelect');
-  const verfuegbareJahre = dataManager.getVerfuegbareJahre();
+  const verfuegbareJahre = await dataManager.getVerfuegbareJahre();
 
   verfuegbareJahre.forEach(jahr => {
     const option = document.createElement('option');
@@ -74,16 +74,16 @@ function initUI() {
     jahrSelect.appendChild(option);
   });
 
-  jahrSelect.addEventListener('change', (e) => {
+  jahrSelect.addEventListener('change', async (e) => {
     dataManager.aktuellesJahr = parseInt(e.target.value);
     dataManager.invalidateCache();
-    loadData();
+    await loadData();
     showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
   });
 
   // Abteilungs-Filter
   const abteilungFilter = document.getElementById('abteilungFilter');
-  const abteilungen = dataManager.getAlleAbteilungen();
+  const abteilungen = await dataManager.getAlleAbteilungen();
 
   abteilungen.forEach(abt => {
     const option = document.createElement('option');
@@ -92,31 +92,31 @@ function initUI() {
     abteilungFilter.appendChild(option);
   });
 
-  abteilungFilter.addEventListener('change', (e) => {
+  abteilungFilter.addEventListener('change', async (e) => {
     const abteilung = e.target.value === 'Alle' ? null : e.target.value;
     const suchbegriff = document.getElementById('suchfeld').value;
-    tabelle.suchen(suchbegriff, abteilung);
+    await tabelle.suchen(suchbegriff, abteilung);
   });
 
   // Suchfeld
   const suchfeld = document.getElementById('suchfeld');
-  suchfeld.addEventListener('input', (e) => {
+  suchfeld.addEventListener('input', async (e) => {
     const abteilung = abteilungFilter.value === 'Alle' ? null : abteilungFilter.value;
-    tabelle.suchen(e.target.value, abteilung);
+    await tabelle.suchen(e.target.value, abteilung);
   });
 
   // Menü-Items
   document.getElementById('menuStammdatenHinzufuegen').addEventListener('click', (e) => {
     e.preventDefault();
-    dialogManager.zeigeStammdatenHinzufuegen(() => {
-      loadData();
+    dialogManager.zeigeStammdatenHinzufuegen(async () => {
+      await loadData();
     });
   });
 
   document.getElementById('menuStammdatenVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
-    dialogManager.zeigeStammdatenVerwalten(() => {
-      loadData();
+    dialogManager.zeigeStammdatenVerwalten(async () => {
+      await loadData();
     });
   });
 
@@ -125,12 +125,12 @@ function initUI() {
     showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
   });
 
-  document.getElementById('menuVeranstaltungenVerwalten').addEventListener('click', (e) => {
+  document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
     showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
   });
 
-  document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
+  document.getElementById('menuVeranstaltungenVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
     showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
   });
@@ -145,6 +145,20 @@ function initUI() {
     showNotification('Info', 'Excel-Export ist noch nicht implementiert', 'info');
   });
 
+  // Toolbar-Buttons
+  document.getElementById('btnNeuerMitarbeiter').addEventListener('click', (e) => {
+    e.preventDefault();
+    dialogManager.zeigeStammdatenHinzufuegen(async () => {
+      await loadData();
+    });
+  });
+
+  document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await loadData();
+    showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
+  });
+
   // Event Delegation für Tabellen-Buttons
   document.getElementById('mitarbeiterTabelleBody').addEventListener('click', (e) => {
     const button = e.target.closest('button');
@@ -156,24 +170,24 @@ function initUI() {
     if (button.classList.contains('btn-details')) {
       zeigeDetails(mitarbeiterId);
     } else if (button.classList.contains('btn-bearbeiten')) {
-      dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, () => {
-        loadData();
+      dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
+        await loadData();
       });
     } else if (button.classList.contains('btn-urlaub')) {
-      dialogManager.zeigeUrlaubDialog(mitarbeiterId, () => {
-        loadData();
+      dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
+        await loadData();
       });
     } else if (button.classList.contains('btn-krank')) {
-      dialogManager.zeigeKrankDialog(mitarbeiterId, () => {
-        loadData();
+      dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
+        await loadData();
       });
     } else if (button.classList.contains('btn-schulung')) {
-      dialogManager.zeigeSchulungDialog(mitarbeiterId, () => {
-        loadData();
+      dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
+        await loadData();
       });
     } else if (button.classList.contains('btn-ueberstunden')) {
-      dialogManager.zeigeUeberstundenDialog(mitarbeiterId, () => {
-        loadData();
+      dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
+        await loadData();
       });
     }
   });
@@ -182,19 +196,27 @@ function initUI() {
 /**
  * Daten laden und Tabelle aktualisieren
  */
-function loadData() {
-  const abteilung = document.getElementById('abteilungFilter').value;
-  const filter = abteilung === 'Alle' ? null : abteilung;
+async function loadData() {
+  try {
+    const abteilung = document.getElementById('abteilungFilter').value;
+    const filter = abteilung === 'Alle' ? null : abteilung;
 
-  tabelle.aktualisieren(filter);
+    await tabelle.aktualisieren(filter);
+  } catch (error) {
+    console.error('Fehler beim Laden:', error);
+    showNotification('Fehler', `Daten konnten nicht geladen werden: ${error.message}`, 'danger');
+  }
 }
 
 /**
  * Zeigt Details für einen Mitarbeiter
  */
-function zeigeDetails(mitarbeiterId) {
-  const stat = dataManager.getMitarbeiterStatistik(mitarbeiterId);
-  if (!stat) return;
+async function zeigeDetails(mitarbeiterId) {
+  const stat = await dataManager.getMitarbeiterStatistik(mitarbeiterId);
+  if (!stat) {
+    showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
+    return;
+  }
 
   const ma = stat.mitarbeiter;
 
@@ -312,7 +334,12 @@ function zeigeDetails(mitarbeiterId) {
  */
 async function exportToCSV() {
   try {
-    const stats = dataManager.getAlleStatistiken();
+    const stats = await dataManager.getAlleStatistiken();
+
+    if (stats.length === 0) {
+      showNotification('Info', 'Keine Daten zum Exportieren vorhanden', 'warning');
+      return;
+    }
 
     // CSV Header
     let csv = 'Mitarbeiter-ID;Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
@@ -339,7 +366,7 @@ async function exportToCSV() {
 
       if (!result.canceled && result.filePath) {
         await window.electronAPI.writeFile(result.filePath, csv);
-        showNotification('Export erfolgreich', `Daten wurden exportiert nach:\n${result.filePath}`, 'success');
+        showNotification('Export erfolgreich', `Daten wurden exportiert`, 'success');
       }
     } else {
       // Fallback für Browser (Download)

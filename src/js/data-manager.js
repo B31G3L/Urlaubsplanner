@@ -1,6 +1,6 @@
 /**
  * Teamplanner Data Manager
- * Business Logic Layer - Portiert von Python DataManager
+ * Business Logic Layer - Async Version für IPC
  */
 
 class TeamplannerDataManager {
@@ -24,45 +24,45 @@ class TeamplannerDataManager {
   /**
    * Gibt alle Mitarbeiter zurück
    */
-  getAlleMitarbeiter() {
-    const stmt = this.db.db.prepare(`
+  async getAlleMitarbeiter() {
+    const sql = `
       SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.status = 'AKTIV'
       ORDER BY m.nachname, m.vorname
-    `);
+    `;
 
-    return stmt.all();
+    return await this.db.query(sql);
   }
 
   /**
    * Gibt einen einzelnen Mitarbeiter zurück
    */
-  getMitarbeiter(mitarbeiterId) {
-    const stmt = this.db.db.prepare(`
+  async getMitarbeiter(mitarbeiterId) {
+    const sql = `
       SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.id = ?
-    `);
+    `;
 
-    return stmt.get(mitarbeiterId);
+    return await this.db.get(sql, [mitarbeiterId]);
   }
 
   /**
    * Gibt alle Abteilungen zurück
    */
-  getAlleAbteilungen() {
-    return this.db.db.prepare('SELECT * FROM abteilungen ORDER BY name').all();
+  async getAlleAbteilungen() {
+    return await this.db.query('SELECT * FROM abteilungen ORDER BY name');
   }
 
   /**
    * Berechnet Urlaubsübertrag rekursiv
    */
-  berechneUebertrag(mitarbeiterId, jahr) {
+  async berechneUebertrag(mitarbeiterId, jahr) {
     // Mitarbeiter laden
-    const mitarbeiter = this.db.db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(mitarbeiterId);
+    const mitarbeiter = await this.db.get('SELECT * FROM mitarbeiter WHERE id = ?', [mitarbeiterId]);
     if (!mitarbeiter) return 0;
 
     const vorjahr = jahr - 1;
@@ -72,13 +72,13 @@ class TeamplannerDataManager {
     if (vorjahr < eintrittsjahr) return 0;
 
     // Rekursiv: Übertrag vom Vorvorjahr
-    const uebertragVorvorjahr = this.berechneUebertrag(mitarbeiterId, vorjahr);
+    const uebertragVorvorjahr = await this.berechneUebertrag(mitarbeiterId, vorjahr);
 
     // Verfügbar im Vorjahr
     const verfuegbarVorjahr = mitarbeiter.urlaubstage_jahr + uebertragVorvorjahr;
 
     // Genommen im Vorjahr
-    const genommenVorjahr = this.getUrlaubSummeNachJahr(mitarbeiterId, vorjahr);
+    const genommenVorjahr = await this.getUrlaubSummeNachJahr(mitarbeiterId, vorjahr);
 
     // Rest berechnen
     const rest = verfuegbarVorjahr - genommenVorjahr;
@@ -90,60 +90,60 @@ class TeamplannerDataManager {
   /**
    * Gibt Urlaubssumme für ein Jahr zurück
    */
-  getUrlaubSummeNachJahr(mitarbeiterId, jahr) {
-    const stmt = this.db.db.prepare(`
+  async getUrlaubSummeNachJahr(mitarbeiterId, jahr) {
+    const sql = `
       SELECT COALESCE(SUM(tage), 0) as summe
       FROM urlaub
       WHERE mitarbeiter_id = ?
         AND strftime('%Y', von_datum) = ?
-    `);
+    `;
 
-    const result = stmt.get(mitarbeiterId, jahr.toString());
+    const result = await this.db.get(sql, [mitarbeiterId, jahr.toString()]);
     return result.summe || 0;
   }
 
   /**
    * Gibt Statistik für einen Mitarbeiter zurück
    */
-  getMitarbeiterStatistik(mitarbeiterId) {
-    const mitarbeiter = this.db.db.prepare(`
+  async getMitarbeiterStatistik(mitarbeiterId) {
+    const mitarbeiter = await this.db.get(`
       SELECT m.*, a.name as abteilung_name, a.farbe as abteilung_farbe
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.id = ?
-    `).get(mitarbeiterId);
+    `, [mitarbeiterId]);
 
     if (!mitarbeiter) return null;
 
     // Übertrag berechnen
-    const uebertrag = this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
+    const uebertrag = await this.berechneUebertrag(mitarbeiterId, this.aktuellesJahr);
 
     // Urlaub genommen
-    const urlaubGenommen = this.getUrlaubSummeNachJahr(mitarbeiterId, this.aktuellesJahr);
+    const urlaubGenommen = await this.getUrlaubSummeNachJahr(mitarbeiterId, this.aktuellesJahr);
 
     // Krankheitstage
-    const krankheit = this.db.db.prepare(`
+    const krankheit = await this.db.get(`
       SELECT COALESCE(SUM(tage), 0) as summe
       FROM krankheit
       WHERE mitarbeiter_id = ?
         AND strftime('%Y', von_datum) = ?
-    `).get(mitarbeiterId, this.aktuellesJahr.toString());
+    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
 
     // Schulungstage
-    const schulung = this.db.db.prepare(`
+    const schulung = await this.db.get(`
       SELECT COALESCE(SUM(dauer_tage), 0) as summe
       FROM schulung
       WHERE mitarbeiter_id = ?
         AND strftime('%Y', datum) = ?
-    `).get(mitarbeiterId, this.aktuellesJahr.toString());
+    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
 
     // Überstunden
-    const ueberstunden = this.db.db.prepare(`
+    const ueberstunden = await this.db.get(`
       SELECT COALESCE(SUM(stunden), 0) as summe
       FROM ueberstunden
       WHERE mitarbeiter_id = ?
         AND strftime('%Y', datum) = ?
-    `).get(mitarbeiterId, this.aktuellesJahr.toString());
+    `, [mitarbeiterId, this.aktuellesJahr.toString()]);
 
     return {
       mitarbeiter,
@@ -160,50 +160,57 @@ class TeamplannerDataManager {
   /**
    * Gibt alle Statistiken zurück
    */
-  getAlleStatistiken(abteilung = null) {
+  async getAlleStatistiken(abteilung = null) {
     let mitarbeiter;
 
     if (abteilung && abteilung !== 'Alle') {
-      const abt = this.db.db.prepare('SELECT id FROM abteilungen WHERE name = ?').get(abteilung);
+      const abt = await this.db.get('SELECT id FROM abteilungen WHERE name = ?', [abteilung]);
       if (!abt) return [];
 
-      mitarbeiter = this.db.db.prepare(`
+      mitarbeiter = await this.db.query(`
         SELECT * FROM mitarbeiter
         WHERE abteilung_id = ? AND status = 'AKTIV'
         ORDER BY nachname, vorname
-      `).all(abt.id);
+      `, [abt.id]);
     } else {
-      mitarbeiter = this.db.db.prepare(`
+      mitarbeiter = await this.db.query(`
         SELECT * FROM mitarbeiter
         WHERE status = 'AKTIV'
         ORDER BY nachname, vorname
-      `).all();
+      `);
     }
 
-    return mitarbeiter.map(ma => this.getMitarbeiterStatistik(ma.id));
+    const statistiken = [];
+    for (const ma of mitarbeiter) {
+      const stat = await this.getMitarbeiterStatistik(ma.id);
+      if (stat) {
+        statistiken.push(stat);
+      }
+    }
+
+    return statistiken;
   }
 
   /**
    * Fügt Mitarbeiter hinzu
    */
-  stammdatenHinzufuegen(mitarbeiterId, daten) {
+  async stammdatenHinzufuegen(mitarbeiterId, daten) {
     try {
       // Abteilung finden
-      const abteilung = this.db.db.prepare('SELECT id FROM abteilungen WHERE name = ?').get(daten.abteilung);
+      const abteilung = await this.db.get('SELECT id FROM abteilungen WHERE name = ?', [daten.abteilung]);
       if (!abteilung) {
-        console.error(`Abteilung '${daten.abteilung}' nicht gefunden`);
-        return false;
+        throw new Error(`Abteilung '${daten.abteilung}' nicht gefunden`);
       }
 
       // Mitarbeiter einfügen
-      const stmt = this.db.db.prepare(`
+      const sql = `
         INSERT INTO mitarbeiter (
           id, abteilung_id, vorname, nachname, email,
           geburtsdatum, eintrittsdatum, urlaubstage_jahr, status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'AKTIV')
-      `);
+      `;
 
-      stmt.run(
+      await this.db.run(sql, [
         mitarbeiterId,
         abteilung.id,
         daten.vorname,
@@ -212,20 +219,20 @@ class TeamplannerDataManager {
         daten.geburtsdatum || null,
         daten.einstellungsdatum || new Date().toISOString().split('T')[0],
         daten.urlaubstage_jahr || 30
-      );
+      ]);
 
       this.invalidateCache();
       return true;
     } catch (error) {
       console.error('Fehler beim Hinzufügen:', error);
-      return false;
+      throw error;
     }
   }
 
   /**
    * Aktualisiert Mitarbeiter
    */
-  stammdatenAktualisieren(mitarbeiterId, daten) {
+  async stammdatenAktualisieren(mitarbeiterId, daten) {
     try {
       const updates = [];
       const values = [];
@@ -243,7 +250,7 @@ class TeamplannerDataManager {
         values.push(daten.email || null);
       }
       if (daten.abteilung !== undefined) {
-        const abt = this.db.db.prepare('SELECT id FROM abteilungen WHERE name = ?').get(daten.abteilung);
+        const abt = await this.db.get('SELECT id FROM abteilungen WHERE name = ?', [daten.abteilung]);
         if (abt) {
           updates.push('abteilung_id = ?');
           values.push(abt.id);
@@ -272,39 +279,39 @@ class TeamplannerDataManager {
       values.push(mitarbeiterId);
 
       const sql = `UPDATE mitarbeiter SET ${updates.join(', ')} WHERE id = ?`;
-      this.db.db.prepare(sql).run(...values);
+      await this.db.run(sql, values);
 
       this.invalidateCache();
       return true;
     } catch (error) {
       console.error('Fehler beim Aktualisieren:', error);
-      return false;
+      throw error;
     }
   }
 
   /**
    * Deaktiviert einen Mitarbeiter
    */
-  mitarbeiterDeaktivieren(mitarbeiterId) {
+  async mitarbeiterDeaktivieren(mitarbeiterId) {
     try {
-      this.db.db.prepare(`
+      await this.db.run(`
         UPDATE mitarbeiter
         SET status = 'INAKTIV', aktualisiert_am = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(mitarbeiterId);
+      `, [mitarbeiterId]);
 
       this.invalidateCache();
       return true;
     } catch (error) {
       console.error('Fehler beim Deaktivieren:', error);
-      return false;
+      throw error;
     }
   }
 
   /**
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
    */
-  speichereEintrag(eintrag) {
+  async speichereEintrag(eintrag) {
     try {
       const typ = eintrag.typ;
       const mitarbeiterId = eintrag.mitarbeiter_id;
@@ -313,75 +320,73 @@ class TeamplannerDataManager {
       const notiz = eintrag.beschreibung || null;
 
       if (typ === 'urlaub') {
-        // Bis-Datum berechnen
         const vonDatum = new Date(datum);
         const bisDatum = new Date(vonDatum);
         bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
 
-        this.db.db.prepare(`
+        await this.db.run(`
           INSERT INTO urlaub (mitarbeiter_id, von_datum, bis_datum, tage, notiz)
           VALUES (?, ?, ?, ?, ?)
-        `).run(
+        `, [
           mitarbeiterId,
           datum,
           bisDatum.toISOString().split('T')[0],
           wert,
           notiz
-        );
+        ]);
       } else if (typ === 'krank') {
         const vonDatum = new Date(datum);
         const bisDatum = new Date(vonDatum);
         bisDatum.setDate(bisDatum.getDate() + Math.floor(wert) - 1);
 
-        this.db.db.prepare(`
+        await this.db.run(`
           INSERT INTO krankheit (mitarbeiter_id, von_datum, bis_datum, tage, notiz)
           VALUES (?, ?, ?, ?, ?)
-        `).run(
+        `, [
           mitarbeiterId,
           datum,
           bisDatum.toISOString().split('T')[0],
           wert,
           notiz
-        );
+        ]);
       } else if (typ === 'schulung') {
-        this.db.db.prepare(`
+        await this.db.run(`
           INSERT INTO schulung (mitarbeiter_id, datum, dauer_tage, titel, notiz)
           VALUES (?, ?, ?, ?, ?)
-        `).run(
+        `, [
           mitarbeiterId,
           datum,
           wert,
           eintrag.titel || null,
           notiz
-        );
+        ]);
       } else if (typ === 'ueberstunden') {
-        this.db.db.prepare(`
+        await this.db.run(`
           INSERT INTO ueberstunden (mitarbeiter_id, datum, stunden, notiz)
           VALUES (?, ?, ?, ?)
-        `).run(
+        `, [
           mitarbeiterId,
           datum,
           wert,
           notiz
-        );
+        ]);
       } else {
-        console.error(`Unbekannter Typ: ${typ}`);
-        return false;
+        throw new Error(`Unbekannter Typ: ${typ}`);
       }
 
       this.invalidateCache();
       return true;
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
-      return false;
+      throw error;
     }
   }
 
   /**
    * Gibt verfügbare Jahre zurück
    */
-  getVerfuegbareJahre() {
-    const result = this.db.db.prepare(`
+  async getVerfuegbareJahre() {
+    const result = await this.db.query(`
       SELECT DISTINCT CAST(strftime('%Y', von_datum) AS INTEGER) as jahr
       FROM urlaub
       UNION
@@ -394,7 +399,7 @@ class TeamplannerDataManager {
       SELECT DISTINCT CAST(strftime('%Y', datum) AS INTEGER) as jahr
       FROM ueberstunden
       ORDER BY jahr DESC
-    `).all();
+    `);
 
     const jahre = new Set(result.map(r => r.jahr));
 
@@ -407,7 +412,7 @@ class TeamplannerDataManager {
   }
 }
 
-// Export für Node.js
+// Export für ES6 Module
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = TeamplannerDataManager;
 }

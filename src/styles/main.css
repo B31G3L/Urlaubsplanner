@@ -97,6 +97,10 @@ header.bg-primary {
   color: #e0e0e0;
 }
 
+.card-footer {
+  border-top: 1px solid #495057;
+}
+
 /* Buttons */
 .btn-group-sm > .btn,
 .btn-sm {
@@ -124,55 +128,10 @@ header.bg-primary {
   color: #6c757d;
 }
 
-/* Modals */
-.modal {
-  z-index: 9999 !important;
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  outline: 0;
-}
-
-.modal.show {
-  display: block !important;
-}
-
-.modal-backdrop {
-  z-index: 9998 !important;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.modal-backdrop.show {
-  opacity: 0.5;
-}
-
-.modal-dialog {
-  position: relative;
-  width: auto;
-  margin: 1.75rem auto;
-  pointer-events: none;
-}
-
+/* Modals - Bootstrap handhabt das z-index automatisch korrekt */
 .modal-content {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  pointer-events: auto;
   background-color: var(--card-bg);
   border: 1px solid #495057;
-  border-radius: 0.3rem;
-  outline: 0;
 }
 
 .modal-header {
@@ -213,6 +172,26 @@ header.bg-primary {
 .dropdown-item:focus {
   background-color: #3d3d3d;
   color: #fff;
+}
+
+/* Loading Overlay */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.loading-overlay .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  border-width: 0.3em;
 }
 
 /* Loading Spinner */
@@ -259,6 +238,12 @@ header.bg-primary {
   .btn-sm {
     font-size: 0.75rem;
   }
+
+  .card-footer .col {
+    flex: 0 0 50%;
+    max-width: 50%;
+    margin-bottom: 1rem;
+  }
 }
 
 /* Animationen */
@@ -275,6 +260,16 @@ header.bg-primary {
 
 .fade-in {
   animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
 }
 
 /* Zahlen-Highlighting */
@@ -295,4 +290,39 @@ header.bg-primary {
 
 .number-neutral {
   color: #e0e0e0;
+}
+
+/* Toolbar Improvements */
+#suchfeld::placeholder {
+  color: #6c757d;
+  opacity: 1;
+}
+
+#btnAktualisieren:hover i {
+  animation: spin 1s linear infinite;
+}
+
+/* Empty State */
+.empty-state {
+  padding: 4rem 2rem;
+  text-align: center;
+  color: #6c757d;
+}
+
+.empty-state i {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+/* Statistik Footer Verbesserungen */
+.card-footer .h5 {
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.card-footer small {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }

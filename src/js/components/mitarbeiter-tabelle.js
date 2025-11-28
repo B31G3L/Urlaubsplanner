@@ -13,8 +13,8 @@ class MitarbeiterTabelle {
   /**
    * Aktualisiert die Tabelle
    */
-  aktualisieren(abteilung = null) {
-    this.aktuelleStatistiken = this.dataManager.getAlleStatistiken(abteilung);
+  async aktualisieren(abteilung = null) {
+    this.aktuelleStatistiken = await this.dataManager.getAlleStatistiken(abteilung);
     this.render();
     this.updateStatistiken();
   }
@@ -138,8 +138,8 @@ class MitarbeiterTabelle {
   /**
    * Sucht Mitarbeiter
    */
-  suchen(suchbegriff, abteilung = null) {
-    let stats = this.dataManager.getAlleStatistiken(abteilung);
+  async suchen(suchbegriff, abteilung = null) {
+    let stats = await this.dataManager.getAlleStatistiken(abteilung);
 
     if (suchbegriff && suchbegriff.trim() !== '') {
       const begriff = suchbegriff.toLowerCase();

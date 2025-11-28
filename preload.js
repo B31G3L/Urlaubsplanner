@@ -17,4 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App APIs
   getAppPath: (name) => ipcRenderer.invoke('app:getPath', name),
   getVersion: () => ipcRenderer.invoke('app:getVersion'),
+
+  // Database APIs
+  db: {
+    query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
+    get: (sql, params) => ipcRenderer.invoke('db:get', sql, params),
+    run: (sql, params) => ipcRenderer.invoke('db:run', sql, params),
+    exec: (sql) => ipcRenderer.invoke('db:exec', sql)
+  }
 });
