@@ -146,13 +146,6 @@ async function initUI() {
   });
 
   // Toolbar-Buttons
-  document.getElementById('btnNeuerMitarbeiter').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenHinzufuegen(async () => {
-      await loadData();
-    });
-  });
-
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
     await loadData();

@@ -60,6 +60,12 @@ header.bg-primary {
   z-index: 10;
 }
 
+/* Tabelle auf volle Höhe */
+.table-responsive {
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
 /* Badges */
 .badge-urlaub {
   background-color: var(--success-color);

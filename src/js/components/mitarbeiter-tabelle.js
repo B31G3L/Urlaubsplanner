@@ -16,7 +16,6 @@ class MitarbeiterTabelle {
   async aktualisieren(abteilung = null) {
     this.aktuelleStatistiken = await this.dataManager.getAlleStatistiken(abteilung);
     this.render();
-    this.updateStatistiken();
   }
 
   /**
@@ -30,7 +29,7 @@ class MitarbeiterTabelle {
     if (this.aktuelleStatistiken.length === 0) {
       this.tbody.innerHTML = `
         <tr>
-          <td colspan="13" class="text-center text-muted py-5">
+          <td colspan="12" class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
             Keine Mitarbeiter gefunden
           </td>
@@ -67,7 +66,6 @@ class MitarbeiterTabelle {
 
     tr.innerHTML = `
       <td class="text-muted">${nr}</td>
-      <td><code>${stat.mitarbeiter.id}</code></td>
       <td class="fw-bold">${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}</td>
       <td>
         <span class="abteilung-badge" style="background-color: ${abteilungFarbe}">
@@ -110,32 +108,6 @@ class MitarbeiterTabelle {
   }
 
   /**
-   * Aktualisiert die Statistik-Footer
-   */
-  updateStatistiken() {
-    const stats = this.aktuelleStatistiken;
-
-    // Anzahl Mitarbeiter
-    document.getElementById('statMitarbeiter').textContent = stats.length;
-
-    // Gesamt Urlaub
-    const gesamtUrlaub = stats.reduce((sum, s) => sum + s.urlaub_genommen, 0);
-    document.getElementById('statUrlaub').textContent = `${gesamtUrlaub.toFixed(1)} Tage`;
-
-    // Gesamt Krank
-    const gesamtKrank = stats.reduce((sum, s) => sum + s.krankheitstage, 0);
-    document.getElementById('statKrank').textContent = `${gesamtKrank.toFixed(1)} Tage`;
-
-    // Gesamt Schulung
-    const gesamtSchulung = stats.reduce((sum, s) => sum + s.schulungstage, 0);
-    document.getElementById('statSchulung').textContent = `${gesamtSchulung.toFixed(1)} Tage`;
-
-    // Gesamt Überstunden
-    const gesamtUeberstunden = stats.reduce((sum, s) => sum + s.ueberstunden, 0);
-    document.getElementById('statUeberstunden').textContent = `${gesamtUeberstunden.toFixed(1)} Std.`;
-  }
-
-  /**
    * Sucht Mitarbeiter
    */
   async suchen(suchbegriff, abteilung = null) {
@@ -154,7 +126,6 @@ class MitarbeiterTabelle {
 
     this.aktuelleStatistiken = stats;
     this.render();
-    this.updateStatistiken();
   }
 }
 
