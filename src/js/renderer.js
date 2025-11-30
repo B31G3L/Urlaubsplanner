@@ -146,13 +146,6 @@ async function initUI() {
   });
 
   // Toolbar-Buttons
-  document.getElementById('btnNeuerMitarbeiter').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenHinzufuegen(async () => {
-      await loadData();
-    });
-  });
-
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
     await loadData();
@@ -236,16 +229,8 @@ async function zeigeDetails(mitarbeiterId) {
                 <h6 class="text-muted mb-3">Stammdaten</h6>
                 <table class="table table-sm">
                   <tr>
-                    <th>ID:</th>
-                    <td><code>${ma.id}</code></td>
-                  </tr>
-                  <tr>
                     <th>Name:</th>
                     <td>${ma.vorname} ${ma.nachname}</td>
-                  </tr>
-                  <tr>
-                    <th>E-Mail:</th>
-                    <td>${ma.email || '-'}</td>
                   </tr>
                   <tr>
                     <th>Abteilung:</th>
@@ -342,12 +327,12 @@ async function exportToCSV() {
     }
 
     // CSV Header
-    let csv = 'Mitarbeiter-ID;Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
+    let csv = 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
 
     // Daten
     stats.forEach(stat => {
       const ma = stat.mitarbeiter;
-      csv += `${ma.id};${ma.vorname};${ma.nachname};${ma.abteilung_name};`;
+      csv += `${ma.vorname};${ma.nachname};${ma.abteilung_name};`;
       csv += `${ma.urlaubstage_jahr};${stat.uebertrag_vorjahr.toFixed(1)};${stat.urlaub_verfuegbar.toFixed(1)};`;
       csv += `${stat.urlaub_genommen.toFixed(1)};${stat.urlaub_rest.toFixed(1)};${stat.krankheitstage.toFixed(1)};`;
       csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;

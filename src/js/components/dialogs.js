@@ -26,11 +26,6 @@ class DialogManager {
             </div>
             <div class="modal-body">
               <form id="stammdatenForm">
-                <div class="mb-3">
-                  <label class="form-label">Mitarbeiter-ID *</label>
-                  <input type="text" class="form-control" id="mitarbeiterId" required>
-                </div>
-
                 <div class="row">
                   <div class="col-md-6 mb-3">
                     <label class="form-label">Vorname *</label>
@@ -40,11 +35,6 @@ class DialogManager {
                     <label class="form-label">Nachname *</label>
                     <input type="text" class="form-control" id="nachname" required>
                   </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">E-Mail</label>
-                  <input type="email" class="form-control" id="email">
                 </div>
 
                 <div class="mb-3">
@@ -92,14 +82,18 @@ class DialogManager {
       const daten = {
         vorname: document.getElementById('vorname').value,
         nachname: document.getElementById('nachname').value,
-        email: document.getElementById('email').value || null,
+        email: null,
         abteilung: document.getElementById('abteilung').value,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         einstellungsdatum: document.getElementById('einstellungsdatum').value,
         urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value)
       };
 
-      const mitarbeiterId = document.getElementById('mitarbeiterId').value;
+      // Generiere automatische ID: Nachname + Vorname (erste 3 Buchstaben jeweils)
+      const vorname = daten.vorname.substring(0, 3).toUpperCase();
+      const nachname = daten.nachname.substring(0, 3).toUpperCase();
+      const timestamp = Date.now().toString().slice(-4); // Letzte 4 Ziffern Timestamp
+      const mitarbeiterId = `${nachname}${vorname}${timestamp}`;
 
       try {
         await this.dataManager.stammdatenHinzufuegen(mitarbeiterId, daten);
@@ -147,11 +141,6 @@ class DialogManager {
             </div>
             <div class="modal-body">
               <form id="stammdatenBearbeitenForm">
-                <div class="mb-3">
-                  <label class="form-label">Mitarbeiter-ID</label>
-                  <input type="text" class="form-control" id="mitarbeiterId" value="${mitarbeiter.id}" disabled>
-                </div>
-
                 <div class="row">
                   <div class="col-md-6 mb-3">
                     <label class="form-label">Vorname *</label>
@@ -161,11 +150,6 @@ class DialogManager {
                     <label class="form-label">Nachname *</label>
                     <input type="text" class="form-control" id="nachname" value="${mitarbeiter.nachname}" required>
                   </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">E-Mail</label>
-                  <input type="email" class="form-control" id="email" value="${mitarbeiter.email || ''}">
                 </div>
 
                 <div class="mb-3">
@@ -219,7 +203,7 @@ class DialogManager {
       const daten = {
         vorname: document.getElementById('vorname').value,
         nachname: document.getElementById('nachname').value,
-        email: document.getElementById('email').value || null,
+        email: null,
         abteilung: document.getElementById('abteilung').value,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         einstellungsdatum: document.getElementById('einstellungsdatum').value,
@@ -248,14 +232,12 @@ class DialogManager {
     const mitarbeiterRows = mitarbeiter.map((ma, index) => `
       <tr>
         <td>${index + 1}</td>
-        <td><code>${ma.id}</code></td>
         <td>${ma.vorname} ${ma.nachname}</td>
         <td>
           <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
             ${ma.abteilung_name}
           </span>
         </td>
-        <td>${ma.email || '-'}</td>
         <td>${new Date(ma.eintrittsdatum).toLocaleDateString('de-DE')}</td>
         <td>
           <div class="btn-group btn-group-sm">
@@ -286,10 +268,8 @@ class DialogManager {
                   <thead class="table-dark">
                     <tr>
                       <th>Nr.</th>
-                      <th>ID</th>
                       <th>Name</th>
                       <th>Abteilung</th>
-                      <th>E-Mail</th>
                       <th>Eintrittsdatum</th>
                       <th>Aktionen</th>
                     </tr>

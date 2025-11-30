@@ -30,7 +30,7 @@ class MitarbeiterTabelle {
     if (this.aktuelleStatistiken.length === 0) {
       this.tbody.innerHTML = `
         <tr>
-          <td colspan="13" class="text-center text-muted py-5">
+          <td colspan="12" class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
             Keine Mitarbeiter gefunden
           </td>
@@ -67,7 +67,6 @@ class MitarbeiterTabelle {
 
     tr.innerHTML = `
       <td class="text-muted">${nr}</td>
-      <td><code>${stat.mitarbeiter.id}</code></td>
       <td class="fw-bold">${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}</td>
       <td>
         <span class="abteilung-badge" style="background-color: ${abteilungFarbe}">
@@ -145,10 +144,9 @@ class MitarbeiterTabelle {
       const begriff = suchbegriff.toLowerCase();
       stats = stats.filter(stat => {
         const name = `${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}`.toLowerCase();
-        const id = stat.mitarbeiter.id.toLowerCase();
         const abt = (stat.mitarbeiter.abteilung_name || '').toLowerCase();
 
-        return name.includes(begriff) || id.includes(begriff) || abt.includes(begriff);
+        return name.includes(begriff) || abt.includes(begriff);
       });
     }
 
