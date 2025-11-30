@@ -82,16 +82,9 @@ async function initUI() {
   });
 
   // Abteilungs-Filter
+  await updateAbteilungFilter();
+
   const abteilungFilter = document.getElementById('abteilungFilter');
-  const abteilungen = await dataManager.getAlleAbteilungen();
-
-  abteilungen.forEach(abt => {
-    const option = document.createElement('option');
-    option.value = abt.name;
-    option.textContent = abt.name;
-    abteilungFilter.appendChild(option);
-  });
-
   abteilungFilter.addEventListener('change', async (e) => {
     const abteilung = e.target.value === 'Alle' ? null : e.target.value;
     const suchbegriff = document.getElementById('suchfeld').value;
@@ -122,7 +115,10 @@ async function initUI() {
 
   document.getElementById('menuAbteilungenVerwalten').addEventListener('click', (e) => {
     e.preventDefault();
-    showNotification('Info', 'Diese Funktion ist noch nicht implementiert', 'info');
+    dialogManager.zeigeAbteilungenVerwalten(async () => {
+      await loadData();
+      await updateAbteilungFilter();
+    });
   });
 
   document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
@@ -184,6 +180,34 @@ async function initUI() {
       });
     }
   });
+}
+
+/**
+ * Aktualisiert den Abteilungs-Filter
+ */
+async function updateAbteilungFilter() {
+  const abteilungFilter = document.getElementById('abteilungFilter');
+  const currentValue = abteilungFilter.value;
+  
+  // Lösche alle Optionen außer "Alle"
+  while (abteilungFilter.options.length > 1) {
+    abteilungFilter.remove(1);
+  }
+  
+  // Lade Abteilungen neu
+  const abteilungen = await dataManager.getAlleAbteilungen();
+  
+  abteilungen.forEach(abt => {
+    const option = document.createElement('option');
+    option.value = abt.name;
+    option.textContent = abt.name;
+    abteilungFilter.appendChild(option);
+  });
+  
+  // Versuche den vorherigen Wert wiederherzustellen
+  if (currentValue && Array.from(abteilungFilter.options).some(o => o.value === currentValue)) {
+    abteilungFilter.value = currentValue;
+  }
 }
 
 /**

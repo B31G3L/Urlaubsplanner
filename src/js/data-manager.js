@@ -58,6 +58,99 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Gibt eine einzelne Abteilung zurück
+   */
+  async getAbteilung(abteilungId) {
+    return await this.db.get('SELECT * FROM abteilungen WHERE id = ?', [abteilungId]);
+  }
+
+  /**
+   * Gibt die Anzahl der Mitarbeiter in einer Abteilung zurück
+   */
+  async getMitarbeiterAnzahlInAbteilung(abteilungId) {
+    const result = await this.db.get(`
+      SELECT COUNT(*) as count 
+      FROM mitarbeiter 
+      WHERE abteilung_id = ? AND status = 'AKTIV'
+    `, [abteilungId]);
+    return result ? result.count : 0;
+  }
+
+  /**
+   * Fügt eine neue Abteilung hinzu
+   */
+  async abteilungHinzufuegen(daten) {
+    try {
+      // Prüfe ob Name bereits existiert
+      const existing = await this.db.get('SELECT id FROM abteilungen WHERE name = ?', [daten.name]);
+      if (existing) {
+        throw new Error(`Eine Abteilung mit dem Namen "${daten.name}" existiert bereits`);
+      }
+
+      const sql = `
+        INSERT INTO abteilungen (name, farbe, beschreibung)
+        VALUES (?, ?, ?)
+      `;
+
+      await this.db.run(sql, [daten.name, daten.farbe, daten.beschreibung]);
+      this.invalidateCache();
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Hinzufügen der Abteilung:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aktualisiert eine Abteilung
+   */
+  async abteilungAktualisieren(abteilungId, daten) {
+    try {
+      // Prüfe ob Name bereits von einer anderen Abteilung verwendet wird
+      const existing = await this.db.get(
+        'SELECT id FROM abteilungen WHERE name = ? AND id != ?', 
+        [daten.name, abteilungId]
+      );
+      if (existing) {
+        throw new Error(`Eine Abteilung mit dem Namen "${daten.name}" existiert bereits`);
+      }
+
+      const sql = `
+        UPDATE abteilungen 
+        SET name = ?, farbe = ?, beschreibung = ?
+        WHERE id = ?
+      `;
+
+      await this.db.run(sql, [daten.name, daten.farbe, daten.beschreibung, abteilungId]);
+      this.invalidateCache();
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren der Abteilung:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Löscht eine Abteilung (nur wenn keine Mitarbeiter zugeordnet sind)
+   */
+  async abteilungLoeschen(abteilungId) {
+    try {
+      // Prüfe ob noch Mitarbeiter in der Abteilung sind
+      const count = await this.getMitarbeiterAnzahlInAbteilung(abteilungId);
+      if (count > 0) {
+        throw new Error(`Die Abteilung kann nicht gelöscht werden, da noch ${count} Mitarbeiter zugeordnet sind`);
+      }
+
+      await this.db.run('DELETE FROM abteilungen WHERE id = ?', [abteilungId]);
+      this.invalidateCache();
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Löschen der Abteilung:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Berechnet Urlaubsübertrag rekursiv
    */
   async berechneUebertrag(mitarbeiterId, jahr) {
