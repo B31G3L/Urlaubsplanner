@@ -82,6 +82,60 @@ class DialogBase {
   }
 
   /**
+   * Prüft ob Veranstaltungen im Zeitraum liegen
+   */
+  async pruefeVeranstaltungen(vonDatum, bisDatum) {
+    const veranstaltungen = await this.dataManager.db.query(`
+      SELECT titel, von_datum, bis_datum
+      FROM veranstaltungen
+      WHERE (von_datum BETWEEN ? AND ?) 
+         OR (bis_datum BETWEEN ? AND ?) 
+         OR (von_datum <= ? AND bis_datum >= ?)
+      ORDER BY von_datum
+    `, [vonDatum, bisDatum, vonDatum, bisDatum, vonDatum, bisDatum]);
+
+    return veranstaltungen;
+  }
+
+  /**
+   * Erstellt HTML für Veranstaltungs-Hinweise
+   */
+  erstelleVeranstaltungsHinweisHTML(veranstaltungen) {
+    if (veranstaltungen.length === 0) {
+      return '';
+    }
+
+    let html = `
+      <div class="alert alert-info" role="alert">
+        <i class="bi bi-calendar-event"></i> <strong>Hinweis:</strong> 
+        Im gewählten Zeitraum ${veranstaltungen.length === 1 ? 'findet eine Veranstaltung statt' : 'finden Veranstaltungen statt'}:
+        <ul class="mb-0 mt-2">
+    `;
+
+    veranstaltungen.forEach(v => {
+      const vonFormatiert = new Date(v.von_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      const bisFormatiert = new Date(v.bis_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+      
+      const datumText = v.von_datum === v.bis_datum 
+        ? vonFormatiert 
+        : `${vonFormatiert} - ${bisFormatiert}`;
+      
+      html += `
+        <li>
+          <strong>${v.titel}</strong> (${datumText})
+        </li>
+      `;
+    });
+
+    html += `
+        </ul>
+      </div>
+    `;
+
+    return html;
+  }
+
+  /**
    * Prüft Kollegen-Abwesenheiten in der gleichen Abteilung
    */
   async pruefeKollegenAbwesenheiten(mitarbeiterId, vonDatum, bisDatum, typ) {

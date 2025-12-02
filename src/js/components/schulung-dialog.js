@@ -48,6 +48,9 @@ class SchulungDialog extends DialogBase {
                   </div>
                 </div>
 
+                <!-- Veranstaltungs-Hinweise Container -->
+                <div id="veranstaltungsHinweise"></div>
+
                 <!-- Kollegen-Hinweise Container -->
                 <div id="kollegenHinweise"></div>
 
@@ -110,8 +113,9 @@ class SchulungDialog extends DialogBase {
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
       const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
+      const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
 
-      const berechneDauer = async () => {
+      const aktualisiereHinweise = async () => {
         const von = vonDatumInput.value;
         const bis = bisDatumInput.value;
         
@@ -121,6 +125,10 @@ class SchulungDialog extends DialogBase {
         } else {
           const arbeitstage = berechneArbeitstage(von, bis);
           dauerAnzeige.textContent = arbeitstage;
+
+          // Prüfe Veranstaltungen
+          const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
+          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
 
           // Prüfe Kollegen-Abwesenheiten
           const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'schulung');
@@ -133,16 +141,16 @@ class SchulungDialog extends DialogBase {
           bisDatumInput.value = vonDatumInput.value;
         }
         bisDatumInput.min = vonDatumInput.value;
-        await berechneDauer();
+        await aktualisiereHinweise();
       });
 
-      bisDatumInput.addEventListener('change', berechneDauer);
+      bisDatumInput.addEventListener('change', aktualisiereHinweise);
 
       // Setze initiales min für Bis-Datum
       bisDatumInput.min = vonDatumInput.value;
 
       // Initial prüfen
-      await berechneDauer();
+      await aktualisiereHinweise();
 
       // Dauer-Buttons
       document.querySelectorAll('.dauer-btn').forEach(btn => {
@@ -159,14 +167,8 @@ class SchulungDialog extends DialogBase {
             dauerAnzeige.textContent = tage;
           }
 
-          // Prüfe Kollegen nach Änderung
-          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
-            mitarbeiterId, 
-            vonDatumInput.value, 
-            bisDatumInput.value, 
-            'schulung'
-          );
-          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+          // Aktualisiere Hinweise nach Änderung
+          await aktualisiereHinweise();
         });
       });
     }, 100);

@@ -5,22 +5,6 @@
 
 class VeranstaltungDialog extends DialogBase {
   /**
-   * Gibt Veranstaltungs-Typen zurück
-   */
-  getTypen() {
-    return [
-      { value: 'MEETING', label: 'Meeting', farbe: '#17a2b8', icon: 'bi-people' },
-      { value: 'SCHULUNG', label: 'Schulung', farbe: '#28a745', icon: 'bi-book' },
-      { value: 'MESSE', label: 'Messe', farbe: '#ffc107', icon: 'bi-shop' },
-      { value: 'BETRIEBSFEIER', label: 'Betriebsfeier', farbe: '#e83e8c', icon: 'bi-balloon' },
-      { value: 'BETRIEBSAUSFLUG', label: 'Betriebsausflug', farbe: '#20c997', icon: 'bi-bus-front' },
-      { value: 'WARTUNG', label: 'Wartung/Revision', farbe: '#6c757d', icon: 'bi-tools' },
-      { value: 'BETRIEBSURLAUB', label: 'Betriebsurlaub', farbe: '#dc3545', icon: 'bi-house-door' },
-      { value: 'SONSTIGES', label: 'Sonstiges', farbe: '#6f42c1', icon: 'bi-calendar-event' }
-    ];
-  }
-
-  /**
    * Zeigt Veranstaltungs-Verwaltungs-Modal
    */
   async zeigeVeranstaltungVerwalten(callback) {
@@ -31,10 +15,7 @@ class VeranstaltungDialog extends DialogBase {
       ORDER BY von_datum
     `, [jahr.toString(), jahr.toString()]);
 
-    const typen = this.getTypen();
-
     const veranstaltungRows = veranstaltungen.map((va, index) => {
-      const typ = typen.find(t => t.value === va.typ) || typen.find(t => t.value === 'SONSTIGES');
       const vonDatum = new Date(va.von_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const bisDatum = new Date(va.bis_datum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const dauerTage = Math.ceil((new Date(va.bis_datum) - new Date(va.von_datum)) / (1000 * 60 * 60 * 24)) + 1;
@@ -42,15 +23,11 @@ class VeranstaltungDialog extends DialogBase {
       return `
         <tr>
           <td>${index + 1}</td>
-          <td>
-            <span class="badge" style="background-color: ${typ.farbe}">
-              <i class="bi ${typ.icon} me-1"></i>${typ.label}
-            </span>
-          </td>
           <td><strong>${va.titel}</strong></td>
           <td>${vonDatum}</td>
           <td>${bisDatum}</td>
           <td class="text-center">${dauerTage}</td>
+          <td>${va.beschreibung || '-'}</td>
           <td>
             <div class="btn-group btn-group-sm">
               <button class="btn btn-outline-primary btn-va-bearbeiten" data-id="${va.id}" title="Bearbeiten">
@@ -81,27 +58,17 @@ class VeranstaltungDialog extends DialogBase {
                   <i class="bi bi-plus-circle"></i> Neue Veranstaltung
                 </button>
               </div>
-              
-              <!-- Legende -->
-              <div class="mb-3">
-                <small class="text-muted">Typen: </small>
-                ${typen.map(t => `
-                  <span class="badge me-1" style="background-color: ${t.farbe}">
-                    <i class="bi ${t.icon} me-1"></i>${t.label}
-                  </span>
-                `).join('')}
-              </div>
 
               <div class="table-responsive">
                 <table class="table table-hover table-striped">
                   <thead class="table-dark">
                     <tr>
                       <th>Nr.</th>
-                      <th>Typ</th>
                       <th>Titel</th>
                       <th>Von</th>
                       <th>Bis</th>
                       <th class="text-center">Tage</th>
+                      <th>Beschreibung</th>
                       <th>Aktionen</th>
                     </tr>
                   </thead>
@@ -189,7 +156,6 @@ class VeranstaltungDialog extends DialogBase {
   async zeigeVeranstaltungHinzufuegen(callback) {
     const heute = new Date();
     const formatDate = (date) => date.toISOString().split('T')[0];
-    const typen = this.getTypen();
 
     const modalHtml = `
       <div class="modal fade" id="veranstaltungHinzufuegenModal" tabindex="-1">
@@ -207,15 +173,6 @@ class VeranstaltungDialog extends DialogBase {
                   <label class="form-label">Titel *</label>
                   <input type="text" class="form-control" id="veranstaltungTitel" required 
                          placeholder="z.B. Weihnachtsfeier, Sommerfest, Messebesuch...">
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Typ *</label>
-                  <select class="form-select" id="veranstaltungTyp" required>
-                    ${typen.map(t => `
-                      <option value="${t.value}">${t.label}</option>
-                    `).join('')}
-                  </select>
                 </div>
 
                 <div class="row">
@@ -271,7 +228,6 @@ class VeranstaltungDialog extends DialogBase {
 
       const daten = {
         titel: document.getElementById('veranstaltungTitel').value.trim(),
-        typ: document.getElementById('veranstaltungTyp').value,
         von_datum: document.getElementById('vonDatum').value,
         bis_datum: document.getElementById('bisDatum').value,
         beschreibung: document.getElementById('veranstaltungBeschreibung').value.trim() || null
@@ -280,8 +236,8 @@ class VeranstaltungDialog extends DialogBase {
       try {
         await this.dataManager.db.run(`
           INSERT INTO veranstaltungen (von_datum, bis_datum, titel, beschreibung, typ)
-          VALUES (?, ?, ?, ?, ?)
-        `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung, daten.typ]);
+          VALUES (?, ?, ?, ?, 'SONSTIGES')
+        `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung]);
 
         showNotification('Erfolg', `Veranstaltung "${daten.titel}" wurde angelegt!`, 'success');
         if (callback) await callback();
@@ -347,8 +303,6 @@ class VeranstaltungDialog extends DialogBase {
       return;
     }
 
-    const typen = this.getTypen();
-
     const modalHtml = `
       <div class="modal fade" id="veranstaltungBearbeitenModal" tabindex="-1">
         <div class="modal-dialog">
@@ -364,15 +318,6 @@ class VeranstaltungDialog extends DialogBase {
                 <div class="mb-3">
                   <label class="form-label">Titel *</label>
                   <input type="text" class="form-control" id="veranstaltungTitel" value="${veranstaltung.titel}" required>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Typ *</label>
-                  <select class="form-select" id="veranstaltungTyp" required>
-                    ${typen.map(t => `
-                      <option value="${t.value}" ${veranstaltung.typ === t.value ? 'selected' : ''}>${t.label}</option>
-                    `).join('')}
-                  </select>
                 </div>
 
                 <div class="row">
@@ -416,7 +361,6 @@ class VeranstaltungDialog extends DialogBase {
 
       const daten = {
         titel: document.getElementById('veranstaltungTitel').value.trim(),
-        typ: document.getElementById('veranstaltungTyp').value,
         von_datum: document.getElementById('vonDatum').value,
         bis_datum: document.getElementById('bisDatum').value,
         beschreibung: document.getElementById('veranstaltungBeschreibung').value.trim() || null
@@ -425,9 +369,9 @@ class VeranstaltungDialog extends DialogBase {
       try {
         await this.dataManager.db.run(`
           UPDATE veranstaltungen 
-          SET von_datum = ?, bis_datum = ?, titel = ?, beschreibung = ?, typ = ?
+          SET von_datum = ?, bis_datum = ?, titel = ?, beschreibung = ?
           WHERE id = ?
-        `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung, daten.typ, veranstaltungId]);
+        `, [daten.von_datum, daten.bis_datum, daten.titel, daten.beschreibung, veranstaltungId]);
 
         showNotification('Erfolg', `Veranstaltung "${daten.titel}" wurde aktualisiert!`, 'success');
         if (callback) await callback();
