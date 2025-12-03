@@ -163,7 +163,8 @@ async function initUI() {
 
     switch (action) {
       case 'details':
-        zeigeDetails(mitarbeiterId);
+        // Verwende den neuen DetailDialog mit Jahr-Navigation
+        dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
         break;
       case 'bearbeiten':
         dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {

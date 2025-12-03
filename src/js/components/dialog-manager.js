@@ -16,6 +16,7 @@ class DialogManager {
     this.ueberstundenDialog = new UeberstundenDialog(dataManager);
     this.feiertagDialog = new FeiertagDialog(dataManager);
     this.veranstaltungDialog = new VeranstaltungDialog(dataManager);
+    this.detailDialog = new DetailDialog(dataManager);
   }
 
   // === Stammdaten-Dialoge ===
@@ -90,6 +91,12 @@ class DialogManager {
 
   async zeigeVeranstaltungBearbeiten(veranstaltungId, callback) {
     return this.veranstaltungDialog.zeigeVeranstaltungBearbeiten(veranstaltungId, callback);
+  }
+
+  // === Detail-Dialog (NEU) ===
+  
+  async zeigeDetails(mitarbeiterId, jahr = null) {
+    return this.detailDialog.zeigeDetails(mitarbeiterId, jahr);
   }
 }
 
