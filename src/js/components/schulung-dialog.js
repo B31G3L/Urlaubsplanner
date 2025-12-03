@@ -1,6 +1,6 @@
 /**
  * Schulung-Dialog
- * Schulung eintragen
+ * Schulung eintragen mit Feiertags-Berücksichtigung
  */
 
 class SchulungDialog extends DialogBase {
@@ -35,7 +35,12 @@ class SchulungDialog extends DialogBase {
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Arbeitstage (ohne Wochenende): <span id="dauerAnzeige" class="fw-bold">1</span></label>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <label class="form-label mb-0">
+                      Schulungstage: <span id="dauerAnzeige" class="fw-bold text-info">1</span>
+                    </label>
+                    <small class="text-muted" id="berechnungsInfo">(ohne Wochenenden & Feiertage)</small>
+                  </div>
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
@@ -47,6 +52,9 @@ class SchulungDialog extends DialogBase {
                     </div>
                   </div>
                 </div>
+
+                <!-- Feiertags-Hinweise Container -->
+                <div id="feiertagsHinweise"></div>
 
                 <!-- Veranstaltungs-Hinweise Container -->
                 <div id="veranstaltungsHinweise"></div>
@@ -112,6 +120,7 @@ class SchulungDialog extends DialogBase {
       const vonDatumInput = document.getElementById('vonDatum');
       const bisDatumInput = document.getElementById('bisDatum');
       const dauerAnzeige = document.getElementById('dauerAnzeige');
+      const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
       const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
       const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
 
@@ -122,18 +131,25 @@ class SchulungDialog extends DialogBase {
         if (new Date(bis) < new Date(von)) {
           bisDatumInput.value = von;
           dauerAnzeige.textContent = '1';
-        } else {
-          const arbeitstage = berechneArbeitstage(von, bis);
-          dauerAnzeige.textContent = arbeitstage;
-
-          // Prüfe Veranstaltungen
-          const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
-          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
-
-          // Prüfe Kollegen-Abwesenheiten
-          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'schulung');
-          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+          feiertagsHinweiseDiv.innerHTML = '';
+          return;
         }
+        
+        // Berechne Arbeitstage MIT Feiertagen (async)
+        const arbeitstage = await berechneArbeitstageAsync(von, bis);
+        dauerAnzeige.textContent = arbeitstage;
+
+        // Hole Feiertage im Zeitraum für Anzeige
+        const feiertage = await getFeiertageImZeitraum(von, bis);
+        feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+
+        // Prüfe Veranstaltungen
+        const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
+        veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+
+        // Prüfe Kollegen-Abwesenheiten
+        const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'schulung');
+        kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
       };
 
       vonDatumInput.addEventListener('change', async () => {
@@ -152,7 +168,7 @@ class SchulungDialog extends DialogBase {
       // Initial prüfen
       await aktualisiereHinweise();
 
-      // Dauer-Buttons
+      // Dauer-Buttons - jetzt mit async Feiertags-Berechnung
       document.querySelectorAll('.dauer-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           const tage = parseFloat(btn.dataset.tage);
@@ -161,14 +177,32 @@ class SchulungDialog extends DialogBase {
           if (tage === 0.5) {
             bisDatumInput.value = von;
             dauerAnzeige.textContent = '0.5';
+            feiertagsHinweiseDiv.innerHTML = '';
           } else {
-            const bis = berechneEndDatumNachArbeitstagen(von, tage);
+            // Berechne Enddatum MIT Feiertagen
+            const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
             bisDatumInput.value = bis;
-            dauerAnzeige.textContent = tage;
+            
+            // Aktualisiere Anzeige
+            const arbeitstage = await berechneArbeitstageAsync(von, bis);
+            dauerAnzeige.textContent = arbeitstage;
+            
+            // Hole Feiertage im Zeitraum
+            const feiertage = await getFeiertageImZeitraum(von, bis);
+            feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
           }
 
           // Aktualisiere Hinweise nach Änderung
-          await aktualisiereHinweise();
+          const veranstaltungen = await this.pruefeVeranstaltungen(vonDatumInput.value, bisDatumInput.value);
+          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+            mitarbeiterId, 
+            vonDatumInput.value, 
+            bisDatumInput.value, 
+            'schulung'
+          );
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         });
       });
     }, 100);

@@ -53,6 +53,10 @@ class FeiertagDialog extends DialogBase {
                   <i class="bi bi-calendar-check"></i> Deutsche Feiertage ${jahr} laden
                 </button>
               </div>
+              <div class="alert alert-info" role="alert">
+                <i class="bi bi-info-circle"></i> <strong>Hinweis:</strong> 
+                Feiertage werden bei der Urlaubsplanung automatisch berücksichtigt und von den Urlaubstagen abgezogen.
+              </div>
               <div class="table-responsive">
                 <table class="table table-hover table-striped">
                   <thead class="table-dark">
@@ -107,6 +111,8 @@ class FeiertagDialog extends DialogBase {
       if (confirm(`Möchten Sie die deutschen Feiertage für ${jahr} laden? Bereits vorhandene Feiertage werden nicht überschrieben.`)) {
         try {
           await this.ladeStandardFeiertage(jahr);
+          // Cache invalidieren
+          invalidiereFeiertageCache();
           showNotification('Erfolg', `Deutsche Feiertage für ${jahr} wurden geladen`, 'success');
           modal.hide();
           if (callback) await callback();
@@ -139,6 +145,8 @@ class FeiertagDialog extends DialogBase {
         if (confirm(`Möchten Sie den Feiertag "${feiertag.name}" wirklich löschen?`)) {
           try {
             await this.dataManager.db.run('DELETE FROM feiertage WHERE id = ?', [feiertagId]);
+            // Cache invalidieren
+            invalidiereFeiertageCache();
             showNotification('Erfolg', `Feiertag "${feiertag.name}" wurde gelöscht`, 'success');
             modal.hide();
             if (callback) await callback();
@@ -247,6 +255,9 @@ class FeiertagDialog extends DialogBase {
           VALUES (?, ?, ?, ?)
         `, [daten.datum, daten.name, daten.bundesland, daten.beschreibung]);
 
+        // Cache invalidieren
+        invalidiereFeiertageCache();
+        
         showNotification('Erfolg', `Feiertag "${daten.name}" wurde angelegt!`, 'success');
         if (callback) await callback();
         return true;
@@ -362,6 +373,9 @@ class FeiertagDialog extends DialogBase {
           SET datum = ?, name = ?, bundesland = ?, beschreibung = ?
           WHERE id = ?
         `, [daten.datum, daten.name, daten.bundesland, daten.beschreibung, feiertagId]);
+
+        // Cache invalidieren
+        invalidiereFeiertageCache();
 
         showNotification('Erfolg', `Feiertag "${daten.name}" wurde aktualisiert!`, 'success');
         if (callback) await callback();

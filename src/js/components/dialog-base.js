@@ -3,8 +3,60 @@
  * Gemeinsame Funktionalität für alle Dialoge
  */
 
+// Globaler Cache für Feiertage (wird beim ersten Aufruf geladen)
+let feiertageCache = null;
+let feiertageCacheJahr = null;
+
+/**
+ * Lädt Feiertage aus der Datenbank
+ */
+async function ladeFeiertage(jahr) {
+  if (feiertageCache && feiertageCacheJahr === jahr) {
+    return feiertageCache;
+  }
+  
+  try {
+    const db = window.electronAPI.db;
+    const result = await db.query(`
+      SELECT datum FROM feiertage 
+      WHERE strftime('%Y', datum) = ?
+    `, [jahr.toString()]);
+    
+    if (!result.success) {
+      console.error('Fehler beim Laden der Feiertage:', result.error);
+      return new Set();
+    }
+    
+    // Erstelle Set für schnelle Lookups
+    feiertageCache = new Set(result.data.map(f => f.datum));
+    feiertageCacheJahr = jahr;
+    
+    return feiertageCache;
+  } catch (error) {
+    console.error('Fehler beim Laden der Feiertage:', error);
+    return new Set();
+  }
+}
+
+/**
+ * Invalidiert den Feiertage-Cache (z.B. nach Änderungen)
+ */
+function invalidiereFeiertageCache() {
+  feiertageCache = null;
+  feiertageCacheJahr = null;
+}
+
+/**
+ * Prüft ob ein Datum ein Feiertag ist
+ */
+function istFeiertag(datum, feiertageSet) {
+  const datumStr = datum.toISOString().split('T')[0];
+  return feiertageSet.has(datumStr);
+}
+
 /**
  * Berechnet die Anzahl der Arbeitstage zwischen zwei Daten (ohne Wochenenden)
+ * SYNCHRONE Version - ohne Feiertage (für Rückwärtskompatibilität)
  */
 function berechneArbeitstage(vonDatum, bisDatum) {
   const von = new Date(vonDatum);
@@ -26,7 +78,78 @@ function berechneArbeitstage(vonDatum, bisDatum) {
 }
 
 /**
- * Berechnet das End-Datum basierend auf Arbeitstagen
+ * Berechnet die Anzahl der Arbeitstage zwischen zwei Daten (ohne Wochenenden UND Feiertage)
+ * ASYNCHRONE Version - mit Feiertagen
+ */
+async function berechneArbeitstageAsync(vonDatum, bisDatum) {
+  const von = new Date(vonDatum);
+  const bis = new Date(bisDatum);
+  
+  // Lade Feiertage für alle betroffenen Jahre
+  const jahreSet = new Set();
+  const current = new Date(von);
+  while (current <= bis) {
+    jahreSet.add(current.getFullYear());
+    current.setDate(current.getDate() + 1);
+  }
+  
+  // Sammle alle Feiertage
+  const alleFeiertage = new Set();
+  for (const jahr of jahreSet) {
+    const feiertage = await ladeFeiertage(jahr);
+    feiertage.forEach(f => alleFeiertage.add(f));
+  }
+  
+  // Berechne Arbeitstage
+  let arbeitstage = 0;
+  const checkDate = new Date(von);
+  
+  while (checkDate <= bis) {
+    const dayOfWeek = checkDate.getDay();
+    const datumStr = checkDate.toISOString().split('T')[0];
+    
+    // Kein Wochenende UND kein Feiertag
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
+      arbeitstage++;
+    }
+    checkDate.setDate(checkDate.getDate() + 1);
+  }
+  
+  return arbeitstage;
+}
+
+/**
+ * Gibt Details zu Feiertagen im Zeitraum zurück (nur Werktage)
+ */
+async function getFeiertageImZeitraum(vonDatum, bisDatum) {
+  try {
+    const db = window.electronAPI.db;
+    const result = await db.query(`
+      SELECT datum, name FROM feiertage 
+      WHERE datum BETWEEN ? AND ?
+      ORDER BY datum
+    `, [vonDatum, bisDatum]);
+    
+    if (!result.success) {
+      console.error('Fehler beim Laden der Feiertage im Zeitraum:', result.error);
+      return [];
+    }
+    
+    // Filtere nur Feiertage die auf Werktage fallen
+    return result.data.filter(f => {
+      const d = new Date(f.datum);
+      const dayOfWeek = d.getDay();
+      return dayOfWeek !== 0 && dayOfWeek !== 6;
+    });
+  } catch (error) {
+    console.error('Fehler beim Laden der Feiertage im Zeitraum:', error);
+    return [];
+  }
+}
+
+/**
+ * Berechnet das End-Datum basierend auf Arbeitstagen (ohne Feiertage)
+ * SYNCHRONE Version
  */
 function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
   const von = new Date(vonDatum);
@@ -36,6 +159,41 @@ function berechneEndDatumNachArbeitstagen(vonDatum, arbeitstage) {
   while (verbleibendeArbeitstage > 0) {
     const dayOfWeek = current.getDay();
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      verbleibendeArbeitstage--;
+    }
+    if (verbleibendeArbeitstage > 0) {
+      current.setDate(current.getDate() + 1);
+    }
+  }
+  
+  return current.toISOString().split('T')[0];
+}
+
+/**
+ * Berechnet das End-Datum basierend auf Arbeitstagen (MIT Feiertagen)
+ * ASYNCHRONE Version
+ */
+async function berechneEndDatumNachArbeitstagenAsync(vonDatum, arbeitstage) {
+  const von = new Date(vonDatum);
+  let verbleibendeArbeitstage = Math.floor(arbeitstage);
+  const current = new Date(von);
+  
+  // Schätze maximales Jahr (großzügig)
+  const maxJahr = von.getFullYear() + 1;
+  
+  // Lade Feiertage für relevante Jahre
+  const alleFeiertage = new Set();
+  for (let jahr = von.getFullYear(); jahr <= maxJahr; jahr++) {
+    const feiertage = await ladeFeiertage(jahr);
+    feiertage.forEach(f => alleFeiertage.add(f));
+  }
+  
+  while (verbleibendeArbeitstage > 0) {
+    const dayOfWeek = current.getDay();
+    const datumStr = current.toISOString().split('T')[0];
+    
+    // Nur zählen wenn kein Wochenende UND kein Feiertag
+    if (dayOfWeek !== 0 && dayOfWeek !== 6 && !alleFeiertage.has(datumStr)) {
       verbleibendeArbeitstage--;
     }
     if (verbleibendeArbeitstage > 0) {
@@ -123,6 +281,43 @@ class DialogBase {
       html += `
         <li>
           <strong>${v.titel}</strong> (${datumText})
+        </li>
+      `;
+    });
+
+    html += `
+        </ul>
+      </div>
+    `;
+
+    return html;
+  }
+
+  /**
+   * Erstellt HTML für Feiertags-Hinweise
+   */
+  erstelleFeiertagsHinweisHTML(feiertage) {
+    if (feiertage.length === 0) {
+      return '';
+    }
+
+    let html = `
+      <div class="alert alert-success" role="alert">
+        <i class="bi bi-calendar-check"></i> <strong>Feiertage im Zeitraum:</strong> 
+        ${feiertage.length === 1 ? 'Ein Feiertag wird' : `${feiertage.length} Feiertage werden`} automatisch abgezogen:
+        <ul class="mb-0 mt-2">
+    `;
+
+    feiertage.forEach(f => {
+      const datumFormatiert = new Date(f.datum).toLocaleDateString('de-DE', { 
+        weekday: 'short', 
+        day: '2-digit', 
+        month: '2-digit' 
+      });
+      
+      html += `
+        <li>
+          <strong>${f.name}</strong> (${datumFormatiert})
         </li>
       `;
     });
@@ -305,5 +500,5 @@ class DialogBase {
 
 // Export für Node.js
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DialogBase, showNotification, berechneArbeitstage, berechneEndDatumNachArbeitstagen };
+  module.exports = { DialogBase, showNotification, berechneArbeitstage, berechneArbeitstageAsync, berechneEndDatumNachArbeitstagen, berechneEndDatumNachArbeitstagenAsync, getFeiertageImZeitraum, invalidiereFeiertageCache };
 }
