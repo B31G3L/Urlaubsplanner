@@ -1,6 +1,7 @@
 /**
  * Kalender-Ansicht Komponente
  * Zeigt einen Monatskalender mit allen Abwesenheiten der Mitarbeiter
+ * INLINE VERSION - Wird im Hauptbereich angezeigt statt als Modal
  */
 
 class KalenderAnsicht {
@@ -13,45 +14,27 @@ class KalenderAnsicht {
     this.abwesenheiten = [];
     this.feiertage = new Map();
     this.veranstaltungen = [];
+    this.ansichtModus = 'monat'; // 'monat' oder 'liste'
   }
 
   /**
-   * Zeigt die Kalenderansicht als Modal
+   * Zeigt die Kalenderansicht inline im Hauptbereich
    */
   async zeigen() {
     // Lade Daten
     await this.ladeDaten();
 
-    const modalHtml = this._erstelleModalHTML();
+    const container = document.getElementById('kalenderAnsicht');
+    if (!container) return;
 
-    // Entferne alte Modals
-    const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => {
-      const existingModal = bootstrap.Modal.getInstance(m);
-      if (existingModal) existingModal.dispose();
-      m.remove();
-    });
-
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    const modalElement = document.querySelector('#kalenderModal');
-    const modal = new bootstrap.Modal(modalElement, {
-      backdrop: 'static',
-      keyboard: true
-    });
+    // Render den Kalender-Inhalt
+    container.innerHTML = this._erstelleInlineHTML();
 
     // Event-Listener initialisieren
-    this._initEventListeners(modalElement, modal);
+    this._initEventListeners(container);
 
     // Kalender rendern
     this._renderKalender();
-
-    modal.show();
-
-    modalElement.addEventListener('hidden.bs.modal', () => {
-      modal.dispose();
-      modalElement.remove();
-    });
   }
 
   /**
@@ -198,96 +181,87 @@ class KalenderAnsicht {
   }
 
   /**
-   * Erstellt das Modal HTML
+   * Erstellt das Inline HTML (ohne Modal-Wrapper)
    */
-  _erstelleModalHTML() {
+  _erstelleInlineHTML() {
     const monatNamen = [
       'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
     ];
 
     return `
-      <div class="modal fade" id="kalenderModal" tabindex="-1">
-        <div class="modal-dialog modal-fullscreen">
-          <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-              <h5 class="modal-title">
-                <i class="bi bi-calendar3"></i> Kalenderansicht
-              </h5>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-0 d-flex flex-column" style="overflow: hidden;">
-              <!-- Kalender-Toolbar -->
-              <div class="kalender-toolbar d-flex align-items-center justify-content-between p-3 bg-dark border-bottom">
-                <div class="d-flex align-items-center gap-3">
-                  <button class="btn btn-outline-light" id="btnVorigerMonat">
-                    <i class="bi bi-chevron-left"></i>
-                  </button>
-                  <h4 class="mb-0 text-white" id="kalenderTitel" style="min-width: 200px; text-align: center;">
-                    ${monatNamen[this.currentMonth]} ${this.currentYear}
-                  </h4>
-                  <button class="btn btn-outline-light" id="btnNaechsterMonat">
-                    <i class="bi bi-chevron-right"></i>
-                  </button>
-                  <button class="btn btn-outline-info ms-2" id="btnHeute">
-                    <i class="bi bi-calendar-date"></i> Heute
-                  </button>
-                </div>
-                
-                <div class="d-flex align-items-center gap-3">
-                  <select class="form-select" id="kalenderAbteilungFilter" style="width: 200px;">
-                    <option value="">Alle Abteilungen</option>
-                    <!-- Wird dynamisch gefüllt -->
-                  </select>
-                  
-                  <div class="btn-group" role="group">
-                    <button class="btn btn-outline-light active" id="btnAnsichtMonat" title="Monatsansicht">
-                      <i class="bi bi-grid-3x3"></i>
-                    </button>
-                    <button class="btn btn-outline-light" id="btnAnsichtListe" title="Listenansicht">
-                      <i class="bi bi-list-ul"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Legende -->
-              <div class="kalender-legende d-flex align-items-center gap-4 px-3 py-2 bg-dark border-bottom">
-                <span class="d-flex align-items-center gap-1">
-                  <span class="legende-farbe" style="background-color: #28a745;"></span>
-                  <small>Urlaub</small>
-                </span>
-                <span class="d-flex align-items-center gap-1">
-                  <span class="legende-farbe" style="background-color: #dc3545;"></span>
-                  <small>Krankheit</small>
-                </span>
-                <span class="d-flex align-items-center gap-1">
-                  <span class="legende-farbe" style="background-color: #17a2b8;"></span>
-                  <small>Schulung</small>
-                </span>
-                <span class="d-flex align-items-center gap-1">
-                  <span class="legende-farbe" style="background-color: #6f42c1;"></span>
-                  <small>Feiertag</small>
-                </span>
-                <span class="d-flex align-items-center gap-1">
-                  <span class="legende-farbe" style="background-color: #fd7e14;"></span>
-                  <small>Veranstaltung</small>
-                </span>
-              </div>
-
-              <!-- Kalender-Container -->
-              <div class="kalender-container flex-grow-1" id="kalenderContainer" style="overflow: auto;">
-                <!-- Wird dynamisch gefüllt -->
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-            </div>
+      <!-- Kalender-Toolbar -->
+      <div class="kalender-toolbar d-flex align-items-center justify-content-between p-3 bg-dark border-bottom">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-outline-light" id="btnVorigerMonat">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <h4 class="mb-0 text-white" id="kalenderTitel" style="min-width: 200px; text-align: center;">
+            ${monatNamen[this.currentMonth]} ${this.currentYear}
+          </h4>
+          <button class="btn btn-outline-light" id="btnNaechsterMonat">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+          <button class="btn btn-outline-info ms-2" id="btnHeute">
+            <i class="bi bi-calendar-date"></i> Heute
+          </button>
+        </div>
+        
+        <div class="d-flex align-items-center gap-3">
+          <select class="form-select" id="kalenderAbteilungFilter" style="width: 200px;">
+            <option value="">Alle Abteilungen</option>
+            <!-- Wird dynamisch gefüllt -->
+          </select>
+          
+          <div class="btn-group" role="group">
+            <button class="btn btn-outline-light ${this.ansichtModus === 'monat' ? 'active' : ''}" id="btnAnsichtMonat" title="Monatsansicht">
+              <i class="bi bi-grid-3x3"></i>
+            </button>
+            <button class="btn btn-outline-light ${this.ansichtModus === 'liste' ? 'active' : ''}" id="btnAnsichtListe" title="Listenansicht">
+              <i class="bi bi-list-ul"></i>
+            </button>
           </div>
         </div>
       </div>
+
+      <!-- Legende -->
+      <div class="kalender-legende d-flex align-items-center gap-4 px-3 py-2 bg-dark border-bottom">
+        <span class="d-flex align-items-center gap-1">
+          <span class="legende-farbe" style="background-color: #28a745;"></span>
+          <small>Urlaub</small>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="legende-farbe" style="background-color: #dc3545;"></span>
+          <small>Krankheit</small>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="legende-farbe" style="background-color: #17a2b8;"></span>
+          <small>Schulung</small>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="legende-farbe" style="background-color: #6f42c1;"></span>
+          <small>Feiertag</small>
+        </span>
+        <span class="d-flex align-items-center gap-1">
+          <span class="legende-farbe" style="background-color: #fd7e14;"></span>
+          <small>Veranstaltung</small>
+        </span>
+      </div>
+
+      <!-- Kalender-Container -->
+      <div class="kalender-container flex-grow-1" id="kalenderContainer" style="overflow: auto;">
+        <!-- Wird dynamisch gefüllt -->
+      </div>
       
       <style>
+        .kalender-inline-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          min-height: 0;
+        }
+        
         .kalender-grid {
           display: grid;
           grid-template-columns: repeat(7, 1fr);
@@ -454,6 +428,11 @@ class KalenderAnsicht {
         .kalender-liste-eintrag:last-child {
           border-bottom: none;
         }
+        
+        .kalender-container {
+          flex: 1;
+          overflow: auto;
+        }
       </style>
     `;
   }
@@ -461,7 +440,7 @@ class KalenderAnsicht {
   /**
    * Initialisiert Event-Listener
    */
-  async _initEventListeners(modalElement, modal) {
+  async _initEventListeners(container) {
     const monatNamen = [
       'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
       'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
@@ -469,17 +448,19 @@ class KalenderAnsicht {
 
     // Abteilungs-Filter füllen
     const abteilungen = await this.dataManager.getAlleAbteilungen();
-    const abteilungFilter = modalElement.querySelector('#kalenderAbteilungFilter');
+    const abteilungFilter = container.querySelector('#kalenderAbteilungFilter');
     
-    abteilungen.forEach(abt => {
-      const option = document.createElement('option');
-      option.value = abt.name;
-      option.textContent = abt.name;
-      abteilungFilter.appendChild(option);
-    });
+    if (abteilungFilter) {
+      abteilungen.forEach(abt => {
+        const option = document.createElement('option');
+        option.value = abt.name;
+        option.textContent = abt.name;
+        abteilungFilter.appendChild(option);
+      });
+    }
 
     // Navigation
-    modalElement.querySelector('#btnVorigerMonat').addEventListener('click', async () => {
+    container.querySelector('#btnVorigerMonat')?.addEventListener('click', async () => {
       this.currentMonth--;
       if (this.currentMonth < 0) {
         this.currentMonth = 11;
@@ -487,11 +468,11 @@ class KalenderAnsicht {
       }
       await this.ladeAbwesenheiten();
       this._renderKalender();
-      modalElement.querySelector('#kalenderTitel').textContent = 
-        `${monatNamen[this.currentMonth]} ${this.currentYear}`;
+      const titel = container.querySelector('#kalenderTitel');
+      if (titel) titel.textContent = `${monatNamen[this.currentMonth]} ${this.currentYear}`;
     });
 
-    modalElement.querySelector('#btnNaechsterMonat').addEventListener('click', async () => {
+    container.querySelector('#btnNaechsterMonat')?.addEventListener('click', async () => {
       this.currentMonth++;
       if (this.currentMonth > 11) {
         this.currentMonth = 0;
@@ -499,52 +480,54 @@ class KalenderAnsicht {
       }
       await this.ladeAbwesenheiten();
       this._renderKalender();
-      modalElement.querySelector('#kalenderTitel').textContent = 
-        `${monatNamen[this.currentMonth]} ${this.currentYear}`;
+      const titel = container.querySelector('#kalenderTitel');
+      if (titel) titel.textContent = `${monatNamen[this.currentMonth]} ${this.currentYear}`;
     });
 
-    modalElement.querySelector('#btnHeute').addEventListener('click', async () => {
+    container.querySelector('#btnHeute')?.addEventListener('click', async () => {
       const heute = new Date();
       this.currentMonth = heute.getMonth();
       this.currentYear = heute.getFullYear();
       await this.ladeDaten();
       this._renderKalender();
-      modalElement.querySelector('#kalenderTitel').textContent = 
-        `${monatNamen[this.currentMonth]} ${this.currentYear}`;
+      const titel = container.querySelector('#kalenderTitel');
+      if (titel) titel.textContent = `${monatNamen[this.currentMonth]} ${this.currentYear}`;
     });
 
     // Abteilungs-Filter
-    abteilungFilter.addEventListener('change', async (e) => {
+    abteilungFilter?.addEventListener('change', async (e) => {
       this.selectedAbteilung = e.target.value || null;
       await this.ladeAbwesenheiten();
       this._renderKalender();
     });
 
     // Ansicht wechseln
-    const btnMonat = modalElement.querySelector('#btnAnsichtMonat');
-    const btnListe = modalElement.querySelector('#btnAnsichtListe');
+    const btnMonat = container.querySelector('#btnAnsichtMonat');
+    const btnListe = container.querySelector('#btnAnsichtListe');
     
-    btnMonat.addEventListener('click', () => {
+    btnMonat?.addEventListener('click', () => {
+      this.ansichtModus = 'monat';
       btnMonat.classList.add('active');
-      btnListe.classList.remove('active');
-      this._renderKalender('monat');
+      btnListe?.classList.remove('active');
+      this._renderKalender();
     });
 
-    btnListe.addEventListener('click', () => {
+    btnListe?.addEventListener('click', () => {
+      this.ansichtModus = 'liste';
       btnListe.classList.add('active');
-      btnMonat.classList.remove('active');
-      this._renderKalender('liste');
+      btnMonat?.classList.remove('active');
+      this._renderKalender();
     });
   }
 
   /**
    * Rendert den Kalender
    */
-  _renderKalender(ansicht = 'monat') {
+  _renderKalender() {
     const container = document.getElementById('kalenderContainer');
     if (!container) return;
 
-    if (ansicht === 'liste') {
+    if (this.ansichtModus === 'liste') {
       container.innerHTML = this._erstelleListenAnsicht();
     } else {
       container.innerHTML = this._erstelleMonatsAnsicht();

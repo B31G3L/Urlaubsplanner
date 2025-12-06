@@ -125,8 +125,10 @@
 
       <!-- Buttons -->
       <div class="toolbar-item toolbar-right">
-        <button class="btn btn-outline-info me-2" id="btnKalenderToolbar" title="Kalenderansicht">
-          <i class="bi bi-calendar3"></i>
+        <!-- Kalender/Tabelle Toggle Button -->
+        <button class="btn btn-outline-info me-2" id="btnAnsichtToggle" title="Zur Kalenderansicht">
+          <i class="bi bi-calendar3" id="ansichtToggleIcon"></i>
+          <span id="ansichtToggleText">Kalender</span>
         </button>
         <button class="btn btn-outline-secondary" id="btnAktualisieren" title="Aktualisieren">
           <i class="bi bi-arrow-clockwise"></i>
@@ -135,7 +137,7 @@
     </div>
 
     <!-- Mitarbeiter-Tabelle -->
-    <div class="table-container">
+    <div class="table-container" id="tabellenAnsicht">
       <table class="table table-hover table-striped mb-0" id="mitarbeiterTabelle">
         <thead class="table-dark sticky-top">
           <tr>
@@ -155,6 +157,11 @@
           <!-- Wird dynamisch gefüllt -->
         </tbody>
       </table>
+    </div>
+
+    <!-- Kalender-Ansicht (inline, initial versteckt) -->
+    <div class="kalender-inline-container d-none" id="kalenderAnsicht">
+      <!-- Wird dynamisch gefüllt -->
     </div>
   </main>
 

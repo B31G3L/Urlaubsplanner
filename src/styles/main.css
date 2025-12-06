@@ -94,6 +94,15 @@ header.bg-primary {
   min-height: 0;
 }
 
+/* Kalender Inline Container - Füllt den Rest wie Tabelle */
+.kalender-inline-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Tabelle */
 .table {
   color: #e0e0e0;
@@ -434,4 +443,14 @@ header.bg-primary {
   font-size: 4rem;
   margin-bottom: 1rem;
   opacity: 0.5;
+}
+
+/* Ansicht Toggle Button - aktiver Zustand */
+#btnAnsichtToggle.btn-outline-info:hover {
+  background-color: var(--info-color);
+  color: white;
+}
+
+#btnAnsichtToggle span {
+  margin-left: 0.25rem;
 }

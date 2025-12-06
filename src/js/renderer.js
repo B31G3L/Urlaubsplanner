@@ -9,6 +9,7 @@ let dataManager;
 let tabelle;
 let dialogManager;
 let kalenderAnsicht;
+let aktuelleAnsicht = 'tabelle'; // 'tabelle' oder 'kalender'
 
 /**
  * App initialisieren
@@ -62,6 +63,46 @@ async function initApp() {
 }
 
 /**
+ * Wechselt zwischen Tabellen- und Kalenderansicht
+ */
+async function toggleAnsicht() {
+  const tabellenAnsicht = document.getElementById('tabellenAnsicht');
+  const kalenderAnsichtDiv = document.getElementById('kalenderAnsicht');
+  const toggleBtn = document.getElementById('btnAnsichtToggle');
+  const toggleIcon = document.getElementById('ansichtToggleIcon');
+  const toggleText = document.getElementById('ansichtToggleText');
+
+  if (aktuelleAnsicht === 'tabelle') {
+    // Wechsle zu Kalender
+    aktuelleAnsicht = 'kalender';
+    
+    tabellenAnsicht.classList.add('d-none');
+    kalenderAnsichtDiv.classList.remove('d-none');
+    
+    // Button anpassen
+    toggleIcon.className = 'bi bi-table';
+    toggleText.textContent = 'Tabelle';
+    toggleBtn.title = 'Zur Tabellenansicht';
+    
+    // Kalender-Jahr synchronisieren und anzeigen
+    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+    await kalenderAnsicht.zeigen();
+    
+  } else {
+    // Wechsle zu Tabelle
+    aktuelleAnsicht = 'tabelle';
+    
+    kalenderAnsichtDiv.classList.add('d-none');
+    tabellenAnsicht.classList.remove('d-none');
+    
+    // Button anpassen
+    toggleIcon.className = 'bi bi-calendar3';
+    toggleText.textContent = 'Kalender';
+    toggleBtn.title = 'Zur Kalenderansicht';
+  }
+}
+
+/**
  * UI initialisieren (Event Listener, etc.)
  */
 async function initUI() {
@@ -83,6 +124,13 @@ async function initUI() {
     dataManager.aktuellesJahr = parseInt(e.target.value);
     dataManager.invalidateCache();
     await loadData();
+    
+    // Wenn Kalender aktiv ist, auch dort aktualisieren
+    if (aktuelleAnsicht === 'kalender') {
+      kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
+      await kalenderAnsicht.zeigen();
+    }
+    
     showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
   });
 
@@ -140,18 +188,18 @@ async function initUI() {
     });
   });
 
-  // Kalender-Menü
-  document.getElementById('menuKalender').addEventListener('click', (e) => {
+  // Kalender-Menü - jetzt Toggle statt Modal
+  document.getElementById('menuKalender').addEventListener('click', async (e) => {
     e.preventDefault();
-    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-    kalenderAnsicht.zeigen();
+    if (aktuelleAnsicht !== 'kalender') {
+      await toggleAnsicht();
+    }
   });
 
-  // Kalender-Button in Toolbar
-  document.getElementById('btnKalenderToolbar').addEventListener('click', (e) => {
+  // Ansicht-Toggle Button in Toolbar
+  document.getElementById('btnAnsichtToggle').addEventListener('click', async (e) => {
     e.preventDefault();
-    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-    kalenderAnsicht.zeigen();
+    await toggleAnsicht();
   });
 
   document.getElementById('menuExportCSV').addEventListener('click', (e) => {
@@ -168,6 +216,12 @@ async function initUI() {
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
     await loadData();
+    
+    // Wenn Kalender aktiv ist, auch dort aktualisieren
+    if (aktuelleAnsicht === 'kalender') {
+      await kalenderAnsicht.zeigen();
+    }
+    
     showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
   });
 
@@ -193,16 +247,25 @@ async function initUI() {
       case 'urlaub':
         dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
           await loadData();
+          if (aktuelleAnsicht === 'kalender') {
+            await kalenderAnsicht.zeigen();
+          }
         });
         break;
       case 'krank':
         dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
           await loadData();
+          if (aktuelleAnsicht === 'kalender') {
+            await kalenderAnsicht.zeigen();
+          }
         });
         break;
       case 'schulung':
         dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
           await loadData();
+          if (aktuelleAnsicht === 'kalender') {
+            await kalenderAnsicht.zeigen();
+          }
         });
         break;
       case 'ueberstunden':
