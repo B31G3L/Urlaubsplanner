@@ -454,3 +454,26 @@ header.bg-primary {
 #btnAnsichtToggle span {
   margin-left: 0.25rem;
 }
+
+
+.mitarbeiter-ausgetreten {
+  background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+.mitarbeiter-ausgetreten:hover {
+  background-color: rgba(220, 53, 69, 0.15) !important;
+}
+
+/* Klickbarer Übertrag im Detail-Dialog */
+#clickUebertrag {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#clickUebertrag:hover {
+  background-color: rgba(23, 162, 184, 0.1);
+}
+
+#clickUebertrag:hover i {
+  color: var(--info-color);
+}

@@ -1,6 +1,10 @@
 /**
  * Mitarbeiter-Tabelle Komponente
  * Rendert die Mitarbeiter-Übersicht gruppiert nach Abteilungen
+ * 
+ * NEU:
+ * - Austrittsdatum wird angezeigt
+ * - Ausgetretene Mitarbeiter werden rot markiert
  */
 
 class MitarbeiterTabelle {
@@ -115,6 +119,12 @@ class MitarbeiterTabelle {
   createRow(stat, nr) {
     const tr = document.createElement('tr');
     tr.className = 'fade-in';
+    
+    // NEU: Prüfe ob Mitarbeiter ausgetreten ist
+    const istAusgetreten = stat.mitarbeiter.austrittsdatum != null;
+    if (istAusgetreten) {
+      tr.classList.add('mitarbeiter-ausgetreten');
+    }
 
     // Rest-Klasse basierend auf Wert
     let restClass = 'number-neutral';
@@ -125,11 +135,26 @@ class MitarbeiterTabelle {
     } else if (stat.urlaub_rest <= 5) {
       restClass = 'number-warning';
     }
+    
+    // NEU: Austrittsdatum formatieren
+    let austrittsInfo = '';
+    if (istAusgetreten) {
+      const austrittsdatum = new Date(stat.mitarbeiter.austrittsdatum);
+      const formatiert = austrittsdatum.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+      austrittsInfo = `<span class="badge bg-danger ms-2" title="Ausgetreten am ${formatiert}">
+        <i class="bi bi-box-arrow-right"></i> ${formatiert}
+      </span>`;
+    }
 
     tr.innerHTML = `
       <td class="text-muted">${nr}</td>
       <td class="clickable clickable-name fw-bold" data-id="${stat.mitarbeiter.id}" data-action="details">
         ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
+        ${austrittsInfo}
       </td>
       <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)}</td>
       <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)}</td>

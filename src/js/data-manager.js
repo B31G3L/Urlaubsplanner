@@ -8,6 +8,10 @@
  * - Zeitzonen-Problem bei Datums-Konvertierung behoben
  * - Bis-Datum bei halben Tagen korrigiert
  * - Überlappungs-Validierung hinzugefügt
+ * 
+ * NEU:
+ * - Filter für Mitarbeiter nach Austrittsjahr
+ * - Manueller Übertrag kann gesetzt werden
  */
 
 class TeamplannerDataManager {
@@ -47,8 +51,9 @@ class TeamplannerDataManager {
   }
 
   /**
-   * Gibt alle Mitarbeiter zurück
+   * Gibt alle Mitarbeiter zurück (nur aktive ODER im aktuellen Jahr ausgetretene)
    * FIX: Korrekte Extraktion der Daten
+   * NEU: Filtert nach Austrittsjahr
    */
   async getAlleMitarbeiter() {
     const sql = `
@@ -56,10 +61,14 @@ class TeamplannerDataManager {
       FROM mitarbeiter m
       LEFT JOIN abteilungen a ON m.abteilung_id = a.id
       WHERE m.status = 'AKTIV'
+        AND (
+          m.austrittsdatum IS NULL 
+          OR CAST(strftime('%Y', m.austrittsdatum) AS INTEGER) >= ?
+        )
       ORDER BY m.nachname, m.vorname
     `;
 
-    const result = await this.db.query(sql);
+    const result = await this.db.query(sql, [this.aktuellesJahr]);
     return result.success ? result.data : [];
   }
 
@@ -200,10 +209,67 @@ class TeamplannerDataManager {
   }
 
   /**
+   * Gibt manuellen Übertrag für ein Jahr zurück (falls vorhanden)
+   * NEU: Für manuelle Übertrag-Anpassung
+   */
+  async getManuellAngepassterUebertrag(mitarbeiterId, jahr) {
+    const result = await this.db.get(`
+      SELECT uebertrag_tage, notiz 
+      FROM uebertrag_manuell 
+      WHERE mitarbeiter_id = ? AND jahr = ?
+    `, [mitarbeiterId, jahr]);
+    
+    return result.success && result.data ? result.data : null;
+  }
+
+  /**
+   * Setzt manuellen Übertrag für ein Jahr
+   * NEU: Für manuelle Übertrag-Anpassung
+   */
+  async setManuellAngepassterUebertrag(mitarbeiterId, jahr, tage, notiz = null) {
+    const result = await this.db.run(`
+      INSERT OR REPLACE INTO uebertrag_manuell (mitarbeiter_id, jahr, uebertrag_tage, notiz)
+      VALUES (?, ?, ?, ?)
+    `, [mitarbeiterId, jahr, tage, notiz]);
+    
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    
+    this.invalidateCache();
+    return true;
+  }
+
+  /**
+   * Löscht manuellen Übertrag (zurück zur automatischen Berechnung)
+   * NEU: Für manuelle Übertrag-Anpassung
+   */
+  async loescheManuellAngepassterUebertrag(mitarbeiterId, jahr) {
+    const result = await this.db.run(`
+      DELETE FROM uebertrag_manuell 
+      WHERE mitarbeiter_id = ? AND jahr = ?
+    `, [mitarbeiterId, jahr]);
+    
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+    
+    this.invalidateCache();
+    return true;
+  }
+
+  /**
    * Berechnet Urlaubsübertrag rekursiv
+   * NEU: Verwendet manuellen Übertrag falls vorhanden
    * FIX: Korrekte Datenextraktion + Tiefenbegrenzung
    */
   async berechneUebertrag(mitarbeiterId, jahr, tiefe = 0) {
+    // Prüfe zuerst ob es einen manuellen Übertrag gibt
+    const manuell = await this.getManuellAngepassterUebertrag(mitarbeiterId, jahr);
+    if (manuell) {
+      return manuell.uebertrag_tage;
+    }
+    
     // Sicherheit: Max 50 Jahre zurück berechnen
     if (tiefe > 50) {
       console.warn('Übertrag-Berechnung: Maximale Tiefe erreicht');
@@ -348,8 +414,9 @@ class TeamplannerDataManager {
   }
 
   /**
-   * Gibt alle Statistiken zurück
+   * Gibt alle Statistiken zurück (gefiltert nach Austrittsjahr)
    * FIX: Korrekte Datenextraktion
+   * NEU: Zeigt nur Mitarbeiter die im aktuellen Jahr aktiv/ausgetreten sind
    */
   async getAlleStatistiken(abteilung = null) {
     let mitarbeiter = [];
@@ -360,17 +427,26 @@ class TeamplannerDataManager {
 
       const maResult = await this.db.query(`
         SELECT * FROM mitarbeiter
-        WHERE abteilung_id = ? AND status = 'AKTIV'
+        WHERE abteilung_id = ? 
+          AND status = 'AKTIV'
+          AND (
+            austrittsdatum IS NULL 
+            OR CAST(strftime('%Y', austrittsdatum) AS INTEGER) >= ?
+          )
         ORDER BY nachname, vorname
-      `, [abtResult.data.id]);
+      `, [abtResult.data.id, this.aktuellesJahr]);
       
       mitarbeiter = maResult.success ? maResult.data : [];
     } else {
       const maResult = await this.db.query(`
         SELECT * FROM mitarbeiter
         WHERE status = 'AKTIV'
+          AND (
+            austrittsdatum IS NULL 
+            OR CAST(strftime('%Y', austrittsdatum) AS INTEGER) >= ?
+          )
         ORDER BY nachname, vorname
-      `);
+      `, [this.aktuellesJahr]);
       
       mitarbeiter = maResult.success ? maResult.data : [];
     }
