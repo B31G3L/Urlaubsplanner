@@ -5,6 +5,7 @@
  * NEU:
  * - Austrittsdatum wird angezeigt
  * - Ausgetretene Mitarbeiter werden rot markiert
+ * - Übertrag ist klickbar zum Anpassen
  */
 
 class MitarbeiterTabelle {
@@ -120,7 +121,7 @@ class MitarbeiterTabelle {
     const tr = document.createElement('tr');
     tr.className = 'fade-in';
     
-    // NEU: Prüfe ob Mitarbeiter ausgetreten ist
+    // Prüfe ob Mitarbeiter ausgetreten ist
     const istAusgetreten = stat.mitarbeiter.austrittsdatum != null;
     if (istAusgetreten) {
       tr.classList.add('mitarbeiter-ausgetreten');
@@ -136,7 +137,7 @@ class MitarbeiterTabelle {
       restClass = 'number-warning';
     }
     
-    // NEU: Austrittsdatum formatieren
+    // Austrittsdatum formatieren
     let austrittsInfo = '';
     if (istAusgetreten) {
       const austrittsdatum = new Date(stat.mitarbeiter.austrittsdatum);
@@ -150,13 +151,22 @@ class MitarbeiterTabelle {
       </span>`;
     }
 
+    // NEU: Übertrag ist klickbar mit Icon
+    const uebertragHtml = `
+      <span class="clickable" data-id="${stat.mitarbeiter.id}" data-action="uebertrag" 
+            title="Übertrag anpassen (Klicken zum Bearbeiten)">
+        ${stat.uebertrag_vorjahr.toFixed(1)}
+        <i class="bi bi-pencil-square ms-1" style="font-size: 0.8em; opacity: 0.6;"></i>
+      </span>
+    `;
+
     tr.innerHTML = `
       <td class="text-muted">${nr}</td>
       <td class="clickable clickable-name fw-bold" data-id="${stat.mitarbeiter.id}" data-action="details">
         ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
         ${austrittsInfo}
       </td>
-      <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)}</td>
+      <td class="text-info">${uebertragHtml}</td>
       <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)}</td>
       <td class="clickable text-success" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
       <td class="${restClass}">${stat.urlaub_rest.toFixed(1)}</td>

@@ -1,6 +1,8 @@
 /**
  * Dialog Manager
  * Zentrale Klasse die alle Dialog-Funktionen zusammenführt
+ * 
+ * UPDATE: Übertrag-Dialog hinzugefügt
  */
 
 class DialogManager {
@@ -17,6 +19,7 @@ class DialogManager {
     this.feiertagDialog = new FeiertagDialog(dataManager);
     this.veranstaltungDialog = new VeranstaltungDialog(dataManager);
     this.detailDialog = new DetailDialog(dataManager);
+    this.uebertragDialog = new UebertragDialog(dataManager); // NEU
   }
 
   // === Stammdaten-Dialoge ===
@@ -93,10 +96,16 @@ class DialogManager {
     return this.veranstaltungDialog.zeigeVeranstaltungBearbeiten(veranstaltungId, callback);
   }
 
-  // === Detail-Dialog (NEU) ===
+  // === Detail-Dialog ===
   
   async zeigeDetails(mitarbeiterId, jahr = null) {
     return this.detailDialog.zeigeDetails(mitarbeiterId, jahr);
+  }
+
+  // === Übertrag-Dialog (NEU) ===
+  
+  async zeigeUebertragAnpassen(mitarbeiterId, callback) {
+    return this.uebertragDialog.zeigeUebertragAnpassen(mitarbeiterId, callback);
   }
 }
 

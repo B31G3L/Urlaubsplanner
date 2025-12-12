@@ -4,6 +4,7 @@
  * 
  * FIX: CSV-Export mit BOM für Excel-Kompatibilität
  * FIX: Memory Leak bei Blob-URL behoben
+ * NEU: Übertrag-Anpassung hinzugefügt
  */
 
 // Globale Variablen
@@ -276,6 +277,11 @@ async function initUI() {
           await loadData();
         });
         break;
+      case 'uebertrag': // NEU
+        dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
+          await loadData();
+        });
+        break;
     }
   });
 }
@@ -321,120 +327,6 @@ async function loadData() {
     console.error('Fehler beim Laden:', error);
     showNotification('Fehler', `Daten konnten nicht geladen werden: ${error.message}`, 'danger');
   }
-}
-
-/**
- * Zeigt Details für einen Mitarbeiter
- */
-async function zeigeDetails(mitarbeiterId) {
-  const stat = await dataManager.getMitarbeiterStatistik(mitarbeiterId);
-  if (!stat) {
-    showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
-    return;
-  }
-
-  const ma = stat.mitarbeiter;
-
-  const modalHtml = `
-    <div class="modal fade" id="detailsModal" tabindex="-1">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">
-              <i class="bi bi-person-badge"></i> Mitarbeiter-Details
-            </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-          </div>
-          <div class="modal-body">
-            <div class="row">
-              <div class="col-md-6">
-                <h6 class="text-muted mb-3">Stammdaten</h6>
-                <table class="table table-sm">
-                  <tr>
-                    <th>Name:</th>
-                    <td>${ma.vorname} ${ma.nachname}</td>
-                  </tr>
-                  <tr>
-                    <th>Abteilung:</th>
-                    <td>
-                      <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
-                        ${ma.abteilung_name}
-                      </span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Geburtsdatum:</th>
-                    <td>${ma.geburtsdatum ? new Date(ma.geburtsdatum).toLocaleDateString('de-DE') : '-'}</td>
-                  </tr>
-                  <tr>
-                    <th>Eintrittsdatum:</th>
-                    <td>${new Date(ma.eintrittsdatum).toLocaleDateString('de-DE')}</td>
-                  </tr>
-                </table>
-              </div>
-
-              <div class="col-md-6">
-                <h6 class="text-muted mb-3">Statistik ${dataManager.aktuellesJahr}</h6>
-                <table class="table table-sm">
-                  <tr>
-                    <th>Anspruch:</th>
-                    <td>${stat.urlaubsanspruch.toFixed(1)} Tage ${stat.urlaubsanspruch < ma.urlaubstage_jahr ? '<small class="text-muted">(anteilig)</small>' : ''}</td>
-                  </tr>
-                  <tr>
-                    <th>Übertrag:</th>
-                    <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)} Tage</td>
-                  </tr>
-                  <tr>
-                    <th>Verfügbar:</th>
-                    <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)} Tage</td>
-                  </tr>
-                  <tr>
-                    <th>Genommen:</th>
-                    <td class="text-warning">${stat.urlaub_genommen.toFixed(1)} Tage</td>
-                  </tr>
-                  <tr>
-                    <th>Rest:</th>
-                    <td class="${stat.urlaub_rest < 0 ? 'text-danger' : 'text-success'} fw-bold">
-                      ${stat.urlaub_rest.toFixed(1)} Tage
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Krankheitstage:</th>
-                    <td class="text-danger">${stat.krankheitstage.toFixed(1)} Tage</td>
-                  </tr>
-                  <tr>
-                    <th>Schulungstage:</th>
-                    <td class="text-info">${stat.schulungstage.toFixed(1)} Tage</td>
-                  </tr>
-                  <tr>
-                    <th>Überstunden:</th>
-                    <td class="text-warning">${stat.ueberstunden.toFixed(1)} Std.</td>
-                  </tr>
-                </table>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const oldModals = document.querySelectorAll('.modal');
-  oldModals.forEach(m => m.remove());
-
-  document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-  const modalElement = document.querySelector('#detailsModal');
-  const modal = new bootstrap.Modal(modalElement);
-  modal.show();
-
-  modalElement.addEventListener('hidden.bs.modal', () => {
-    modal.dispose();
-    modalElement.remove();
-  });
 }
 
 /**

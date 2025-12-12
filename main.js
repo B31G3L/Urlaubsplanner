@@ -3,6 +3,8 @@
  * Verwaltet Fenster, IPC, Datenbank und Systemintegration
  * 
  * PORTABLE VERSION: Datenbank liegt neben der .exe
+ * 
+ * FIX: uebertrag_manuell Tabelle hinzugefügt
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
@@ -179,6 +181,20 @@ function createTables() {
       beschreibung TEXT,
       typ TEXT DEFAULT 'SONSTIGES',
       erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // FIX: Manueller Übertrag (für manuelle Übertrag-Anpassungen)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS uebertrag_manuell (
+      mitarbeiter_id TEXT NOT NULL,
+      jahr INTEGER NOT NULL,
+      uebertrag_tage REAL NOT NULL,
+      notiz TEXT,
+      erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (mitarbeiter_id, jahr),
+      FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
     )
   `);
 
