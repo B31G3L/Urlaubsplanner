@@ -199,9 +199,11 @@ function createDefaultDepartments() {
     `);
 
     const departments = [
-      ['Werkstatt', '#dc3545', 'Werkstatt-Team'],
-      ['Büro', '#1f538d', 'Büro-Team'],
-      ['Lager', '#28a745', 'Lager-Team']
+      ['Buchhaltung', '#0ce729', 'Werkstatt-Team'],
+      ['Verkauf', '#044292', 'Büro-Team'],
+      ['Werkstatt', '#d84e0e', 'Werkstatt-Team'],
+      ['Geschäftsleitung', '#b91601', 'Büro-Team'],
+      ['Service', '#a70b9f', 'Lager-Team']
     ];
 
     const insert = db.transaction((depts) => {
