@@ -1,6 +1,8 @@
 /**
  * Urlaubsplanner - Preload Script
  * Stellt sichere API für Renderer-Prozess bereit
+ * 
+ * FIX: Korrekte Verschachtelung der DB-Funktionen unter electronAPI.db
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
@@ -22,9 +24,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getLogFiles: () => ipcRenderer.invoke('app:getLogFiles'),
   readLog: (logFile) => ipcRenderer.invoke('app:readLog', logFile),
   
-  // Datenbank-Operationen
-  dbQuery: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
-  dbGet: (sql, params) => ipcRenderer.invoke('db:get', sql, params),
-  dbRun: (sql, params) => ipcRenderer.invoke('db:run', sql, params),
-  dbExec: (sql) => ipcRenderer.invoke('db:exec', sql)
+  // Datenbank-Operationen (WICHTIG: Korrekt verschachtelt unter .db)
+  db: {
+    query: (sql, params) => ipcRenderer.invoke('db:query', sql, params),
+    get: (sql, params) => ipcRenderer.invoke('db:get', sql, params),
+    run: (sql, params) => ipcRenderer.invoke('db:run', sql, params),
+    exec: (sql) => ipcRenderer.invoke('db:exec', sql)
+  }
 });

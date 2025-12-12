@@ -1,410 +1,525 @@
 /**
- * Teamplanner - Renderer Process
- * Orchestriert die gesamte App
+ * Detail-Dialog
+ * Zeigt alle Einträge eines Mitarbeiters für ein Jahr an
+ * Ermöglicht das Bearbeiten und Löschen von Einträgen
  * 
- * FIX: CSV-Export mit BOM für Excel-Kompatibilität
- * FIX: Memory Leak bei Blob-URL behoben
- * FIX: Haupttabelle wird nach Detail-Dialog-Änderungen aktualisiert
- * NEU: Übertrag-Anpassung hinzugefügt
+ * LAYOUT: Links Stammdaten + KPIs, Rechts Einträge (sortiert chronologisch)
  */
 
-// Globale Variablen
-let database;
-let dataManager;
-let tabelle;
-let dialogManager;
-let kalenderAnsicht;
-let aktuelleAnsicht = 'tabelle'; // 'tabelle' oder 'kalender'
-
-/**
- * App initialisieren
- */
-async function initApp() {
-  console.log('🚀 Teamplanner wird gestartet...');
-
-  try {
-    // Datenbank initialisieren
-    database = new TeamplannerDatabase();
-    console.log('✅ Datenbank initialisiert');
-
-    // DataManager initialisieren
-    dataManager = new TeamplannerDataManager(database);
-    console.log('✅ DataManager initialisiert');
-
-    // Tabelle initialisieren
-    tabelle = new MitarbeiterTabelle(dataManager);
-    console.log('✅ Tabelle initialisiert');
-
-    // Dialog Manager initialisieren
-    dialogManager = new DialogManager(dataManager);
-    console.log('✅ Dialog Manager initialisiert');
-
-    // Kalender-Ansicht initialisieren
-    kalenderAnsicht = new KalenderAnsicht(dataManager);
-    console.log('✅ Kalender-Ansicht initialisiert');
-
-    // UI initialisieren
-    await initUI();
-
-    // Initiale Daten laden
-    await loadData();
-
-    console.log('✅ Teamplanner erfolgreich gestartet');
-
-    // Willkommens-Notification
-    setTimeout(async () => {
-      const info = await database.getDatabaseInfo();
-      showNotification(
-        'Teamplanner geladen',
-        `Jahr: ${dataManager.aktuellesJahr} | Mitarbeiter: ${info.tables.mitarbeiter}`,
-        'success'
-      );
-    }, 500);
-
-  } catch (error) {
-    console.error('❌ Fehler beim Starten:', error);
-    showNotification('Fehler', `Fehler beim Starten: ${error.message}`, 'danger');
-  }
-}
-
-/**
- * Wechselt zwischen Tabellen- und Kalenderansicht
- */
-async function toggleAnsicht() {
-  const tabellenAnsicht = document.getElementById('tabellenAnsicht');
-  const kalenderAnsichtDiv = document.getElementById('kalenderAnsicht');
-  const toggleBtn = document.getElementById('btnAnsichtToggle');
-  const toggleIcon = document.getElementById('ansichtToggleIcon');
-  const toggleText = document.getElementById('ansichtToggleText');
-
-  if (aktuelleAnsicht === 'tabelle') {
-    // Wechsle zu Kalender
-    aktuelleAnsicht = 'kalender';
+class DetailDialog extends DialogBase {
+  /**
+   * Zeigt Detail-Dialog für einen Mitarbeiter
+   */
+  async zeigeDetails(mitarbeiterId, jahr = null) {
+    jahr = jahr || this.dataManager.aktuellesJahr;
     
-    tabellenAnsicht.classList.add('d-none');
-    kalenderAnsichtDiv.classList.remove('d-none');
-    
-    // Button anpassen
-    toggleIcon.className = 'bi bi-table';
-    toggleText.textContent = 'Tabelle';
-    toggleBtn.title = 'Zur Tabellenansicht';
-    
-    // Kalender-Jahr synchronisieren und anzeigen
-    kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-    await kalenderAnsicht.zeigen();
-    
-  } else {
-    // Wechsle zu Tabelle
-    aktuelleAnsicht = 'tabelle';
-    
-    kalenderAnsichtDiv.classList.add('d-none');
-    tabellenAnsicht.classList.remove('d-none');
-    
-    // Button anpassen
-    toggleIcon.className = 'bi bi-calendar3';
-    toggleText.textContent = 'Kalender';
-    toggleBtn.title = 'Zur Kalenderansicht';
-  }
-}
-
-/**
- * UI initialisieren (Event Listener, etc.)
- */
-async function initUI() {
-  // Jahr-Auswahl
-  const jahrSelect = document.getElementById('jahrSelect');
-  const verfuegbareJahre = await dataManager.getVerfuegbareJahre();
-
-  verfuegbareJahre.forEach(jahr => {
-    const option = document.createElement('option');
-    option.value = jahr;
-    option.textContent = jahr;
-    if (jahr === dataManager.aktuellesJahr) {
-      option.selected = true;
-    }
-    jahrSelect.appendChild(option);
-  });
-
-  jahrSelect.addEventListener('change', async (e) => {
-    dataManager.aktuellesJahr = parseInt(e.target.value);
-    dataManager.invalidateCache();
-    await loadData();
-    
-    // Wenn Kalender aktiv ist, auch dort aktualisieren
-    if (aktuelleAnsicht === 'kalender') {
-      kalenderAnsicht.currentYear = dataManager.aktuellesJahr;
-      await kalenderAnsicht.zeigen();
-    }
-    
-    showNotification('Jahr gewechselt', `Aktuelles Jahr: ${dataManager.aktuellesJahr}`, 'info');
-  });
-
-  // Abteilungs-Filter
-  await updateAbteilungFilter();
-
-  const abteilungFilter = document.getElementById('abteilungFilter');
-  abteilungFilter.addEventListener('change', async (e) => {
-    const abteilung = e.target.value === 'Alle' ? null : e.target.value;
-    const suchbegriff = document.getElementById('suchfeld').value;
-    await tabelle.suchen(suchbegriff, abteilung);
-  });
-
-  // Suchfeld
-  const suchfeld = document.getElementById('suchfeld');
-  suchfeld.addEventListener('input', async (e) => {
-    const abteilung = abteilungFilter.value === 'Alle' ? null : abteilungFilter.value;
-    await tabelle.suchen(e.target.value, abteilung);
-  });
-
-  // Menü-Items
-  document.getElementById('menuStammdatenHinzufuegen').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenHinzufuegen(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuStammdatenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuAbteilungenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeAbteilungenVerwalten(async () => {
-      await loadData();
-      await updateAbteilungFilter();
-    });
-  });
-
-  document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeFeiertagVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuVeranstaltungenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeVeranstaltungVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  // Kalender-Menü - jetzt Toggle statt Modal
-  document.getElementById('menuKalender').addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (aktuelleAnsicht !== 'kalender') {
-      await toggleAnsicht();
-    }
-  });
-
-  // Ansicht-Toggle Button in Toolbar
-  document.getElementById('btnAnsichtToggle').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await toggleAnsicht();
-  });
-
-  document.getElementById('menuExportCSV').addEventListener('click', (e) => {
-    e.preventDefault();
-    exportToCSV();
-  });
-
-  document.getElementById('menuExportExcel').addEventListener('click', (e) => {
-    e.preventDefault();
-    showNotification('Info', 'Excel-Export ist noch nicht implementiert', 'info');
-  });
-
-  // Toolbar-Buttons
-  document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await loadData();
-    
-    // Wenn Kalender aktiv ist, auch dort aktualisieren
-    if (aktuelleAnsicht === 'kalender') {
-      await kalenderAnsicht.zeigen();
-    }
-    
-    showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
-  });
-
-  // Event Delegation für klickbare Tabellenzellen
-  document.getElementById('mitarbeiterTabelleBody').addEventListener('click', async (e) => {
-    const clickable = e.target.closest('.clickable');
-    if (!clickable) return;
-
-    const mitarbeiterId = clickable.dataset.id;
-    const action = clickable.dataset.action;
-    if (!mitarbeiterId || !action) return;
-
-    switch (action) {
-      case 'details':
-        // FIX: Nach Schließen des Detail-Dialogs Haupttabelle aktualisieren
-        await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
-        // Detail-Dialog ist geschlossen, lade Daten neu
-        console.log('🔄 Detail-Dialog geschlossen - aktualisiere Haupttabelle');
-        await loadData();
-        break;
-      case 'bearbeiten':
-        dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
-          await loadData();
-        });
-        break;
-      case 'urlaub':
-        dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
-          await loadData();
-          if (aktuelleAnsicht === 'kalender') {
-            await kalenderAnsicht.zeigen();
-          }
-        });
-        break;
-      case 'krank':
-        dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
-          await loadData();
-          if (aktuelleAnsicht === 'kalender') {
-            await kalenderAnsicht.zeigen();
-          }
-        });
-        break;
-      case 'schulung':
-        dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
-          await loadData();
-          if (aktuelleAnsicht === 'kalender') {
-            await kalenderAnsicht.zeigen();
-          }
-        });
-        break;
-      case 'ueberstunden':
-        dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
-          await loadData();
-        });
-        break;
-      case 'uebertrag':
-        dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
-          await loadData();
-        });
-        break;
-    }
-  });
-}
-
-/**
- * Aktualisiert den Abteilungs-Filter
- */
-async function updateAbteilungFilter() {
-  const abteilungFilter = document.getElementById('abteilungFilter');
-  const currentValue = abteilungFilter.value;
-  
-  // Lösche alle Optionen außer "Alle"
-  while (abteilungFilter.options.length > 1) {
-    abteilungFilter.remove(1);
-  }
-  
-  // Lade Abteilungen neu
-  const abteilungen = await dataManager.getAlleAbteilungen();
-  
-  abteilungen.forEach(abt => {
-    const option = document.createElement('option');
-    option.value = abt.name;
-    option.textContent = abt.name;
-    abteilungFilter.appendChild(option);
-  });
-  
-  // Versuche den vorherigen Wert wiederherzustellen
-  if (currentValue && Array.from(abteilungFilter.options).some(o => o.value === currentValue)) {
-    abteilungFilter.value = currentValue;
-  }
-}
-
-/**
- * Daten laden und Tabelle aktualisieren
- */
-async function loadData() {
-  try {
-    const abteilung = document.getElementById('abteilungFilter').value;
-    const filter = abteilung === 'Alle' ? null : abteilung;
-
-    await tabelle.aktualisieren(filter);
-  } catch (error) {
-    console.error('Fehler beim Laden:', error);
-    showNotification('Fehler', `Daten konnten nicht geladen werden: ${error.message}`, 'danger');
-  }
-}
-
-/**
- * Exportiert Daten als CSV
- * FIX: BOM hinzugefügt für korrekte Umlaut-Darstellung in Excel
- * FIX: Memory Leak bei Blob-URL behoben
- */
-async function exportToCSV() {
-  try {
-    const stats = await dataManager.getAlleStatistiken();
-
-    if (stats.length === 0) {
-      showNotification('Info', 'Keine Daten zum Exportieren vorhanden', 'warning');
+    // Lade Mitarbeiter und Statistik
+    const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+    if (!stat) {
+      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
       return;
     }
 
-    // FIX: BOM (Byte Order Mark) für UTF-8 mit Excel-Kompatibilität
-    const BOM = '\uFEFF';
+    const ma = stat.mitarbeiter;
+
+    // Lade alle Einträge für das Jahr
+    const eintraege = await this._ladeAlleEintraege(mitarbeiterId, jahr);
     
-    // CSV Header
-    let csv = BOM + 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
+    // Kombiniere und sortiere alle Einträge chronologisch
+    const alleEintraegeSortiert = this._kombiniereUndSortiereEintraege(eintraege);
 
-    // Hilfsfunktion: Escape Semikolons in Feldern
-    const escapeField = (field) => {
-      if (field && field.toString().includes(';')) {
-        return `"${field}"`;
-      }
-      return field;
-    };
+    const modalHtml = `
+      <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+          <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname} - Details ${jahr}
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="row">
+                <!-- LINKE SPALTE: Stammdaten + KPIs -->
+                <div class="col-md-4">
+                  <!-- Stammdaten Card -->
+                  <div class="card bg-dark mb-3">
+                    <div class="card-header bg-secondary">
+                      <h6 class="mb-0"><i class="bi bi-person-badge"></i> Stammdaten</h6>
+                    </div>
+                    <div class="card-body">
+                      <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                          <td class="text-muted">ID:</td>
+                          <td class="text-end"><code>${ma.id}</code></td>
+                        </tr>
+                        <tr>
+                          <td class="text-muted">Abteilung:</td>
+                          <td class="text-end">
+                            <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}; font-size: 0.85rem;">
+                              ${ma.abteilung_name}
+                            </span>
+                          </td>
+                        </tr>
+                        ${ma.email ? `
+                        <tr>
+                          <td class="text-muted">Email:</td>
+                          <td class="text-end"><small>${ma.email}</small></td>
+                        </tr>
+                        ` : ''}
+                        ${ma.geburtsdatum ? `
+                        <tr>
+                          <td class="text-muted">Geburtsdatum:</td>
+                          <td class="text-end">${formatDatumAnzeige(ma.geburtsdatum)}</td>
+                        </tr>
+                        ` : ''}
+                        <tr>
+                          <td class="text-muted">Eintritt:</td>
+                          <td class="text-end">${formatDatumAnzeige(ma.eintrittsdatum)}</td>
+                        </tr>
+                        ${ma.austrittsdatum ? `
+                        <tr>
+                          <td class="text-muted">Austritt:</td>
+                          <td class="text-end">
+                            <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
+                          </td>
+                        </tr>
+                        ` : ''}
+                        <tr>
+                          <td class="text-muted">Urlaub/Jahr:</td>
+                          <td class="text-end fw-bold">${ma.urlaubstage_jahr} Tage</td>
+                        </tr>
+                      </table>
+                    </div>
+                  </div>
 
-    // Daten
-    stats.forEach(stat => {
-      const ma = stat.mitarbeiter;
-      csv += `${escapeField(ma.vorname)};${escapeField(ma.nachname)};${escapeField(ma.abteilung_name)};`;
-      csv += `${ma.urlaubstage_jahr};${stat.uebertrag_vorjahr.toFixed(1)};${stat.urlaub_verfuegbar.toFixed(1)};`;
-      csv += `${stat.urlaub_genommen.toFixed(1)};${stat.urlaub_rest.toFixed(1)};${stat.krankheitstage.toFixed(1)};`;
-      csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;
+                  <!-- KPI Cards -->
+                  <div class="card bg-dark mb-3">
+                    <div class="card-header bg-secondary">
+                      <h6 class="mb-0"><i class="bi bi-graph-up"></i> Statistik ${jahr}</h6>
+                    </div>
+                    <div class="card-body p-2">
+                      <!-- Urlaub -->
+                      <div class="kpi-item p-2 mb-2 rounded" style="background-color: rgba(40, 167, 69, 0.1); border-left: 3px solid #28a745;">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <small class="text-muted d-block"><i class="bi bi-calendar-check"></i> Urlaub</small>
+                            <span class="fw-bold text-success fs-5">${stat.urlaub_genommen.toFixed(1)}</span>
+                            <small class="text-muted"> / ${stat.urlaub_verfuegbar.toFixed(1)}</small>
+                          </div>
+                          <div class="text-end">
+                            <small class="text-muted d-block">Rest</small>
+                            <span class="fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
+                              ${stat.urlaub_rest.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Übertrag (klickbar) -->
+                      <div class="kpi-item p-2 mb-2 rounded clickable" id="clickUebertrag" 
+                           style="background-color: rgba(23, 162, 184, 0.1); border-left: 3px solid #17a2b8; cursor: pointer;"
+                           title="Klicken zum Anpassen">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <small class="text-muted d-block"><i class="bi bi-arrow-down-circle"></i> Übertrag ${jahr - 1}</small>
+                            <span class="fw-bold text-info fs-5">${stat.uebertrag_vorjahr.toFixed(1)}</span>
+                          </div>
+                          <i class="bi bi-pencil-square text-info"></i>
+                        </div>
+                      </div>
+
+                      <!-- Krankheit -->
+                      <div class="kpi-item p-2 mb-2 rounded" style="background-color: rgba(220, 53, 69, 0.1); border-left: 3px solid #dc3545;">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <small class="text-muted d-block"><i class="bi bi-bandaid"></i> Krankheit</small>
+                            <span class="fw-bold text-danger fs-5">${stat.krankheitstage.toFixed(1)}</span>
+                            <small class="text-muted">Tage</small>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Schulung -->
+                      <div class="kpi-item p-2 mb-2 rounded" style="background-color: rgba(23, 162, 184, 0.1); border-left: 3px solid #17a2b8;">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <small class="text-muted d-block"><i class="bi bi-book"></i> Schulung</small>
+                            <span class="fw-bold text-info fs-5">${stat.schulungstage.toFixed(1)}</span>
+                            <small class="text-muted">Tage</small>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Überstunden -->
+                      <div class="kpi-item p-2 rounded" style="background-color: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107;">
+                        <div class="d-flex justify-content-between align-items-center">
+                          <div>
+                            <small class="text-muted d-block"><i class="bi bi-clock"></i> Überstunden</small>
+                            <span class="fw-bold text-warning fs-5">${stat.ueberstunden >= 0 ? '+' : ''}${stat.ueberstunden.toFixed(1)}</span>
+                            <small class="text-muted">Std.</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Zusammenfassung -->
+                  <div class="card bg-dark">
+                    <div class="card-body p-3 text-center">
+                      <small class="text-muted d-block mb-2">Gesamteinträge ${jahr}</small>
+                      <div class="d-flex justify-content-around">
+                        <div>
+                          <span class="badge bg-success">${eintraege.urlaub.length}</span>
+                          <small class="d-block text-muted mt-1">Urlaub</small>
+                        </div>
+                        <div>
+                          <span class="badge bg-danger">${eintraege.krankheit.length}</span>
+                          <small class="d-block text-muted mt-1">Krank</small>
+                        </div>
+                        <div>
+                          <span class="badge bg-info">${eintraege.schulung.length}</span>
+                          <small class="d-block text-muted mt-1">Schulung</small>
+                        </div>
+                        <div>
+                          <span class="badge bg-warning">${eintraege.ueberstunden.length}</span>
+                          <small class="d-block text-muted mt-1">Überst.</small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- RECHTE SPALTE: Alle Einträge chronologisch sortiert -->
+                <div class="col-md-8">
+                  <div class="card bg-dark">
+                    <div class="card-header bg-secondary d-flex justify-content-between align-items-center">
+                      <h6 class="mb-0"><i class="bi bi-list-ul"></i> Alle Einträge (chronologisch)</h6>
+                      <small class="text-muted">${alleEintraegeSortiert.length} Einträge</small>
+                    </div>
+                    <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
+                      ${this._renderAlleEintraege(alleEintraegeSortiert)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <i class="bi bi-x-circle"></i> Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Entferne alte Modals
+    const oldModals = document.querySelectorAll('.modal');
+    oldModals.forEach(m => {
+      const existingModal = bootstrap.Modal.getInstance(m);
+      if (existingModal) existingModal.dispose();
+      m.remove();
     });
 
-    // Datei speichern (Electron API)
-    if (window.electronAPI) {
-      const result = await window.electronAPI.saveFile({
-        title: 'CSV Exportieren',
-        defaultPath: `teamplanner_export_${dataManager.aktuellesJahr}.csv`,
-        filters: [
-          { name: 'CSV Dateien', extensions: ['csv'] },
-          { name: 'Alle Dateien', extensions: ['*'] }
-        ]
-      });
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
 
-      if (!result.canceled && result.filePath) {
-        await window.electronAPI.writeFile(result.filePath, csv);
-        showNotification('Export erfolgreich', `Daten wurden exportiert`, 'success');
-      }
-    } else {
-      // Fallback für Browser (Download)
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.href = url;
-      link.download = `teamplanner_export_${dataManager.aktuellesJahr}.csv`;
-      link.click();
-      // FIX: URL wieder freigeben um Memory Leak zu verhindern
-      setTimeout(() => URL.revokeObjectURL(url), 100);
-      showNotification('Export erfolgreich', 'CSV wurde heruntergeladen', 'success');
+    const modalElement = document.querySelector('#detailModal');
+    const modal = new bootstrap.Modal(modalElement);
+
+    // Event-Listener für Löschen-Buttons
+    this._initDeleteListeners(modalElement, mitarbeiterId, modal, jahr);
+
+    // Event-Listener für Übertrag-Anpassung
+    const clickUebertrag = modalElement.querySelector('#clickUebertrag');
+    if (clickUebertrag) {
+      clickUebertrag.addEventListener('click', async () => {
+        modal.hide();
+        // Rufe Dialog Manager auf
+        if (typeof dialogManager !== 'undefined') {
+          await dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
+            // Nach Änderung Detail-Dialog neu laden
+            setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+          });
+        }
+      });
     }
 
-  } catch (error) {
-    console.error('Fehler beim Export:', error);
-    showNotification('Export fehlgeschlagen', error.message, 'danger');
+    modal.show();
+
+    modalElement.addEventListener('hidden.bs.modal', () => {
+      modal.dispose();
+      modalElement.remove();
+    });
+  }
+
+  /**
+   * Lädt alle Einträge für einen Mitarbeiter und Jahr
+   */
+  async _ladeAlleEintraege(mitarbeiterId, jahr) {
+    const jahrStr = jahr.toString();
+
+    // Urlaub
+    const urlaubResult = await this.dataManager.db.query(`
+      SELECT * FROM urlaub 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+      ORDER BY von_datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    // Krankheit
+    const krankheitResult = await this.dataManager.db.query(`
+      SELECT * FROM krankheit 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+      ORDER BY von_datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    // Schulung
+    const schulungResult = await this.dataManager.db.query(`
+      SELECT * FROM schulung 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+      ORDER BY datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    // Überstunden
+    const ueberstundenResult = await this.dataManager.db.query(`
+      SELECT * FROM ueberstunden 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+      ORDER BY datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    return {
+      urlaub: urlaubResult.success ? urlaubResult.data : [],
+      krankheit: krankheitResult.success ? krankheitResult.data : [],
+      schulung: schulungResult.success ? schulungResult.data : [],
+      ueberstunden: ueberstundenResult.success ? ueberstundenResult.data : []
+    };
+  }
+
+  /**
+   * Kombiniert alle Einträge und sortiert sie chronologisch (neueste zuerst)
+   */
+  _kombiniereUndSortiereEintraege(eintraege) {
+    const alle = [];
+
+    // Urlaub
+    eintraege.urlaub.forEach(e => {
+      alle.push({
+        typ: 'urlaub',
+        datum: e.von_datum,
+        datumSort: e.von_datum, // Für Sortierung
+        ...e
+      });
+    });
+
+    // Krankheit
+    eintraege.krankheit.forEach(e => {
+      alle.push({
+        typ: 'krankheit',
+        datum: e.von_datum,
+        datumSort: e.von_datum,
+        ...e
+      });
+    });
+
+    // Schulung
+    eintraege.schulung.forEach(e => {
+      alle.push({
+        typ: 'schulung',
+        datum: e.datum,
+        datumSort: e.datum,
+        ...e
+      });
+    });
+
+    // Überstunden
+    eintraege.ueberstunden.forEach(e => {
+      alle.push({
+        typ: 'ueberstunden',
+        datum: e.datum,
+        datumSort: e.datum,
+        ...e
+      });
+    });
+
+    // Sortiere nach Datum (neueste zuerst)
+    alle.sort((a, b) => {
+      return new Date(b.datumSort) - new Date(a.datumSort);
+    });
+
+    return alle;
+  }
+
+  /**
+   * Rendert alle Einträge in einer Timeline
+   */
+  _renderAlleEintraege(eintraege) {
+    if (eintraege.length === 0) {
+      return `
+        <div class="text-center text-muted py-5">
+          <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+          <p>Keine Einträge für dieses Jahr vorhanden</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="list-group list-group-flush">
+        ${eintraege.map(e => this._renderEintrag(e)).join('')}
+      </div>
+    `;
+  }
+
+  /**
+   * Rendert einen einzelnen Eintrag
+   */
+  _renderEintrag(eintrag) {
+    const config = this._getEintragConfig(eintrag.typ);
+    
+    let hauptInfo = '';
+    let nebenInfo = '';
+
+    switch (eintrag.typ) {
+      case 'urlaub':
+        hauptInfo = `${formatDatumAnzeige(eintrag.von_datum)} - ${formatDatumAnzeige(eintrag.bis_datum)}`;
+        nebenInfo = `<strong>${eintrag.tage.toFixed(1)}</strong> Tage`;
+        break;
+      case 'krankheit':
+        hauptInfo = `${formatDatumAnzeige(eintrag.von_datum)} - ${formatDatumAnzeige(eintrag.bis_datum)}`;
+        nebenInfo = `<strong>${eintrag.tage.toFixed(1)}</strong> Tage`;
+        break;
+      case 'schulung':
+        hauptInfo = formatDatumAnzeige(eintrag.datum);
+        nebenInfo = `<strong>${eintrag.dauer_tage.toFixed(1)}</strong> Tage`;
+        break;
+      case 'ueberstunden':
+        hauptInfo = formatDatumAnzeige(eintrag.datum);
+        const vorzeichen = eintrag.stunden >= 0 ? '+' : '';
+        nebenInfo = `<strong>${vorzeichen}${eintrag.stunden.toFixed(1)}</strong> Std.`;
+        break;
+    }
+
+    return `
+      <div class="list-group-item list-group-item-action bg-dark border-secondary">
+        <div class="d-flex w-100 justify-content-between align-items-start">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center mb-1">
+              <span class="badge ${config.badgeClass} me-2">
+                <i class="${config.icon}"></i> ${config.label}
+              </span>
+              <span class="text-light">${hauptInfo}</span>
+            </div>
+            <div class="d-flex align-items-center">
+              <span class="${config.textClass} me-3">${nebenInfo}</span>
+              ${eintrag.titel ? `<span class="text-info"><i class="bi bi-tag"></i> ${eintrag.titel}</span>` : ''}
+            </div>
+            ${eintrag.notiz ? `
+              <small class="text-muted d-block mt-1">
+                <i class="bi bi-sticky"></i> ${eintrag.notiz}
+              </small>
+            ` : ''}
+          </div>
+          <button class="btn btn-sm btn-outline-danger btn-delete ms-2" 
+                  data-id="${eintrag.id}" 
+                  data-typ="${eintrag.typ}" 
+                  title="Löschen">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Gibt Konfiguration für einen Eintragstyp zurück
+   */
+  _getEintragConfig(typ) {
+    const configs = {
+      urlaub: {
+        label: 'Urlaub',
+        icon: 'bi bi-calendar-check',
+        badgeClass: 'bg-success',
+        textClass: 'text-success'
+      },
+      krankheit: {
+        label: 'Krankheit',
+        icon: 'bi bi-bandaid',
+        badgeClass: 'bg-danger',
+        textClass: 'text-danger'
+      },
+      schulung: {
+        label: 'Schulung',
+        icon: 'bi bi-book',
+        badgeClass: 'bg-info',
+        textClass: 'text-info'
+      },
+      ueberstunden: {
+        label: 'Überstunden',
+        icon: 'bi bi-clock',
+        badgeClass: 'bg-warning text-dark',
+        textClass: 'text-warning'
+      }
+    };
+    return configs[typ] || configs.urlaub;
+  }
+
+  /**
+   * Initialisiert Event-Listener für Löschen-Buttons
+   */
+  _initDeleteListeners(modalElement, mitarbeiterId, modal, jahr) {
+    modalElement.addEventListener('click', async (e) => {
+      const deleteBtn = e.target.closest('.btn-delete');
+      if (!deleteBtn) return;
+
+      const id = parseInt(deleteBtn.dataset.id);
+      const typ = deleteBtn.dataset.typ;
+
+      if (!confirm(`Möchten Sie diesen ${this._getTypLabel(typ)}-Eintrag wirklich löschen?`)) {
+        return;
+      }
+
+      try {
+        // Bestimme Tabellennamen
+        const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
+        
+        const result = await this.dataManager.db.run(
+          `DELETE FROM ${tabelle} WHERE id = ?`,
+          [id]
+        );
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
+        
+        // Cache invalidieren
+        this.dataManager.invalidateCache();
+        
+        // Dialog neu laden
+        modal.hide();
+        setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+      } catch (error) {
+        console.error('Fehler beim Löschen:', error);
+        showNotification('Fehler', error.message, 'danger');
+      }
+    });
+  }
+
+  /**
+   * Gibt Typ-Label zurück
+   */
+  _getTypLabel(typ) {
+    const labels = {
+      urlaub: 'Urlaubs',
+      krankheit: 'Krankheits',
+      schulung: 'Schulungs',
+      ueberstunden: 'Überstunden'
+    };
+    return labels[typ] || typ;
   }
 }
 
-/**
- * App starten wenn DOM geladen
- */
-document.addEventListener('DOMContentLoaded', initApp);
+// Export für Node.js
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = DetailDialog;
+}
