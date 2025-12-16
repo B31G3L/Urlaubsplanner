@@ -103,10 +103,13 @@ header.bg-primary {
   min-height: 0;
 }
 
-/* Tabelle */
+/* Tabelle - NOCH KOMPAKTER */
 .table {
   color: #e0e0e0;
   margin-bottom: 0;
+  font-size: 0.85rem; /* Noch kleinere Schrift */
+  table-layout: fixed; /* Alle Spalten gleich breit */
+  width: 100%;
 }
 
 .table-dark {
@@ -119,39 +122,57 @@ header.bg-primary {
   cursor: pointer;
 }
 
-/* Abteilungs-Header nicht hovern */
+/* Abteilungs-Header nicht hovern und Farbe beibehalten */
 .table-hover tbody tr.abteilung-header:hover {
-  background-color: inherit;
   cursor: default;
+}
+
+.table-hover tbody tr.abteilung-header:hover td {
+  background-color: inherit !important;
 }
 
 .table thead th {
   border-bottom: 2px solid #495057;
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 0.85rem;
-  letter-spacing: 0.5px;
+  font-size: 0.7rem; /* Noch kleiner */
+  letter-spacing: 0.3px;
   position: sticky;
   top: 0;
   z-index: 5;
   background-color: #2d2d2d;
+  padding: 0.4rem 0.5rem; /* Noch kompakter */
 }
+
+/* Spaltenbreiten definieren */
+.table thead th:nth-child(1) { width: 25%; } /* Name - breiter */
+.table thead th:nth-child(2) { width: 12.5%; } /* Genommen */
+.table thead th:nth-child(3) { width: 12.5%; } /* Rest */
+.table thead th:nth-child(4) { width: 12.5%; } /* Krank */
+.table thead th:nth-child(5) { width: 12.5%; } /* Schulung */
+.table thead th:nth-child(6) { width: 12.5%; } /* Überstunden */
+.table thead th:nth-child(7) { width: 12.5%; } /* Aktionen */
 
 .table tbody td {
   vertical-align: middle;
+  padding: 0.3rem 0.5rem; /* Noch kompakter */
+  line-height: 1.3;
 }
 
-/* Abteilungs-Header Zeile */
+/* Abteilungs-Header Zeile - MIT FARBE (WICHTIG!) */
 .abteilung-header {
   position: sticky;
-  top: 42px; /* Höhe des Table-Headers */
+  top: 34px; /* Angepasst für kleineren Header */
   z-index: 4;
 }
 
 .abteilung-header td {
-  font-size: 0.95rem;
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  font-size: 0.85rem;
+  letter-spacing: 0.3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  font-weight: 600;
+  padding: 0.5rem 0.5rem !important;
+  /* Hintergrundfarbe wird per inline-style gesetzt und darf nicht überschrieben werden! */
 }
 
 /* Badges */
@@ -174,9 +195,9 @@ header.bg-primary {
 /* Abteilungs-Badge */
 .abteilung-badge {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-size: 0.85rem;
+  padding: 2px 8px; /* Noch kompakter */
+  border-radius: 3px;
+  font-size: 0.75rem; /* Noch kleiner */
   font-weight: 500;
   color: white;
 }
@@ -198,8 +219,8 @@ header.bg-primary {
 /* Buttons */
 .btn-group-sm > .btn,
 .btn-sm {
-  font-size: 0.85rem;
-  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem; /* Kleiner */
+  padding: 0.2rem 0.4rem; /* Kompakter */
 }
 
 /* Form Controls */
@@ -327,11 +348,11 @@ header.bg-primary {
 /* Responsive */
 @media (max-width: 768px) {
   .table {
-    font-size: 0.85rem;
+    font-size: 0.75rem;
   }
 
   .btn-sm {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
 
   .toolbar {
@@ -370,24 +391,13 @@ header.bg-primary {
   animation: spin 1s linear infinite;
 }
 
-/* Zahlen-Highlighting */
-.number-positive {
-  color: var(--success-color);
-  font-weight: 600;
-}
-
-.number-negative {
-  color: var(--danger-color);
-  font-weight: 600;
-}
-
-.number-warning {
-  color: var(--warning-color);
-  font-weight: 600;
-}
-
+/* Zahlen-Highlighting - ENTFERNT */
+.number-positive,
+.number-negative,
+.number-warning,
 .number-neutral {
   color: #e0e0e0;
+  font-weight: normal;
 }
 
 /* Klickbare Tabellenzellen */

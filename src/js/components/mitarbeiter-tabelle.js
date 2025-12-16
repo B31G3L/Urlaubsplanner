@@ -2,10 +2,11 @@
  * Mitarbeiter-Tabelle Komponente
  * Rendert die Mitarbeiter-Übersicht gruppiert nach Abteilungen
  * 
- * NEU:
- * - Austrittsdatum wird angezeigt
- * - Ausgetretene Mitarbeiter werden rot markiert
- * - Übertrag ist klickbar zum Anpassen (ohne Icon/Tooltip)
+ * ANGEPASST:
+ * - Spalten "Übertrag" und "Verfügbar" entfernt
+ * - Keine Zahlenfarben mehr
+ * - Kompaktere Darstellung
+ * - Abteilungszeilen MIT Farbe
  */
 
 class MitarbeiterTabelle {
@@ -34,7 +35,7 @@ class MitarbeiterTabelle {
     if (this.aktuelleStatistiken.length === 0) {
       this.tbody.innerHTML = `
         <tr>
-          <td colspan="10" class="text-center text-muted py-5">
+          <td colspan="8" class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
             Keine Mitarbeiter gefunden
           </td>
@@ -94,23 +95,41 @@ class MitarbeiterTabelle {
   }
 
   /**
-   * Erstellt Abteilungs-Header Zeile
+   * Erstellt Abteilungs-Header Zeile - MIT GARANTIERTER FARBE
    */
   createAbteilungHeader(abteilung, mitarbeiterAnzahl) {
     const tr = document.createElement('tr');
     tr.className = 'abteilung-header';
+    
+    // Setze Farbe auf TR-Element
     tr.style.backgroundColor = abteilung.farbe;
-
-    tr.innerHTML = `
-      <td colspan="10" class="fw-bold text-white py-2">
-        <div class="d-flex align-items-center">
-          <i class="bi bi-building me-2"></i>
-          <span>${abteilung.name}</span>
-          <span class="ms-2 opacity-75">(${mitarbeiterAnzahl} Mitarbeiter)</span>
-        </div>
-      </td>
-    `;
-
+    
+    // Erstelle TD mit gleicher Farbe (doppelte Absicherung)
+    const td = document.createElement('td');
+    td.colSpan = 8;
+    td.className = 'fw-bold text-white';
+    // Wichtig: Farbe auch auf TD setzen!
+    td.style.backgroundColor = abteilung.farbe;
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'd-flex align-items-center';
+    
+    const icon = document.createElement('i');
+    icon.className = 'bi bi-building me-2';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = abteilung.name;
+    
+    const countSpan = document.createElement('span');
+    countSpan.className = 'ms-2 opacity-75';
+    countSpan.textContent = `(${mitarbeiterAnzahl})`;
+    
+    contentDiv.appendChild(icon);
+    contentDiv.appendChild(nameSpan);
+    contentDiv.appendChild(countSpan);
+    td.appendChild(contentDiv);
+    tr.appendChild(td);
+    
     return tr;
   }
 
@@ -127,16 +146,6 @@ class MitarbeiterTabelle {
       tr.classList.add('mitarbeiter-ausgetreten');
     }
 
-    // Rest-Klasse basierend auf Wert
-    let restClass = 'number-neutral';
-    if (stat.urlaub_rest < 0) {
-      restClass = 'number-negative';
-    } else if (stat.urlaub_rest > 10) {
-      restClass = 'number-positive';
-    } else if (stat.urlaub_rest <= 5) {
-      restClass = 'number-warning';
-    }
-    
     // Austrittsdatum formatieren
     let austrittsInfo = '';
     if (istAusgetreten) {
@@ -151,19 +160,17 @@ class MitarbeiterTabelle {
       </span>`;
     }
 
+    // SPALTEN: Nr, Name, Genommen, Rest, Krank, Schulung, Überstunden, Aktionen
     tr.innerHTML = `
-      <td class="text-muted">${nr}</td>
       <td class="clickable clickable-name fw-bold" data-id="${stat.mitarbeiter.id}" data-action="details">
         ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
         ${austrittsInfo}
       </td>
-      <td class="clickable text-info" data-id="${stat.mitarbeiter.id}" data-action="uebertrag">${stat.uebertrag_vorjahr.toFixed(1)}</td>
-      <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)}</td>
-      <td class="clickable text-success" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
-      <td class="${restClass}">${stat.urlaub_rest.toFixed(1)}</td>
-      <td class="clickable text-danger" data-id="${stat.mitarbeiter.id}" data-action="krank">${stat.krankheitstage.toFixed(1)}</td>
-      <td class="clickable text-info" data-id="${stat.mitarbeiter.id}" data-action="schulung">${stat.schulungstage.toFixed(1)}</td>
-      <td class="clickable text-warning" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
+      <td>${stat.urlaub_rest.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="krank">${stat.krankheitstage.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="schulung">${stat.schulungstage.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="bearbeiten">
         <button class="btn btn-sm btn-outline-primary" title="Bearbeiten">
           <i class="bi bi-pencil"></i>

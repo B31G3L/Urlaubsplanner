@@ -3,6 +3,7 @@
  * Mitarbeiter hinzufügen, bearbeiten und verwalten
  * 
  * FIX: ID-Sanitierung für Umlaute und Sonderzeichen
+ * NEU: Gesamtanzahl Mitarbeiter wird angezeigt
  */
 
 class StammdatenDialog extends DialogBase {
@@ -244,13 +245,13 @@ class StammdatenDialog extends DialogBase {
 
   /**
    * Zeigt Mitarbeiter-Verwaltungs-Modal
+   * NEU: Mit Gesamtanzahl der Mitarbeiter
    */
   async zeigeStammdatenVerwalten(callback) {
     const mitarbeiter = await this.dataManager.getAlleMitarbeiter();
 
     const mitarbeiterRows = mitarbeiter.map((ma, index) => `
       <tr>
-        <td>${index + 1}</td>
         <td>${ma.vorname} ${ma.nachname}</td>
         <td>
           <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
@@ -282,11 +283,14 @@ class StammdatenDialog extends DialogBase {
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+              <!-- NEU: Gesamtanzahl anzeigen -->
+                <strong>Gesamt:</strong> ${mitarbeiter.length} Mitarbeiter
+             
+
               <div class="table-responsive">
                 <table class="table table-hover table-striped">
                   <thead class="table-dark">
                     <tr>
-                      <th>Nr.</th>
                       <th>Name</th>
                       <th>Abteilung</th>
                       <th>Eintrittsdatum</th>
