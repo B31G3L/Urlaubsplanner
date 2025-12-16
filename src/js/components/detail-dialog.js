@@ -4,7 +4,7 @@
  * Ermöglicht das Bearbeiten und Löschen von Einträgen
  * 
  * LAYOUT: Links Stammdaten + KPIs, Rechts Einträge (sortiert chronologisch)
- * NEU: Bearbeiten-Button hinzugefügt, Gesamteinträge-Bereich entfernt
+ * NEU: Bearbeiten-Button für alle Einträge hinzugefügt
  */
 
 class DetailDialog extends DialogBase {
@@ -240,8 +240,8 @@ class DetailDialog extends DialogBase {
     const modalElement = document.querySelector('#detailModal');
     const modal = new bootstrap.Modal(modalElement);
 
-    // Event-Listener für Löschen-Buttons
-    this._initDeleteListeners(modalElement, mitarbeiterId, modal, jahr);
+    // Event-Listener für Löschen- und Bearbeiten-Buttons
+    this._initActionListeners(modalElement, mitarbeiterId, modal, jahr);
 
     // Event-Listener für Urlaub eintragen
     const clickUrlaub = modalElement.querySelector('#clickUrlaub');
@@ -308,15 +308,13 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Bearbeiten-Button (NEU)
+    // Event-Listener für Bearbeiten-Button
     const btnBearbeiten = modalElement.querySelector('#btnMitarbeiterBearbeiten');
     if (btnBearbeiten) {
       btnBearbeiten.addEventListener('click', async () => {
         modal.hide();
-        // Rufe Dialog Manager auf
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
-            // Nach Änderung Detail-Dialog neu laden
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -329,7 +327,6 @@ class DetailDialog extends DialogBase {
       btnExportExcel.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Excel-Export geklickt');
         await this._exportExcel(stat, alleEintraegeSortiert, jahr);
       });
     }
@@ -340,7 +337,6 @@ class DetailDialog extends DialogBase {
       btnExportPDF.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('PDF-Export geklickt');
         await this._exportPDF(stat, alleEintraegeSortiert, jahr);
       });
     }
@@ -352,7 +348,7 @@ class DetailDialog extends DialogBase {
       modalElement.addEventListener('hidden.bs.modal', () => {
         modal.dispose();
         modalElement.remove();
-        resolve(); // Resolve das Promise erst jetzt
+        resolve();
       }, { once: true });
     });
   }
@@ -428,7 +424,7 @@ class DetailDialog extends DialogBase {
       alle.push({
         typ: 'urlaub',
         datum: e.von_datum,
-        datumSort: e.von_datum, // Für Sortierung
+        datumSort: e.von_datum,
         ...e
       });
     });
@@ -540,12 +536,20 @@ class DetailDialog extends DialogBase {
               </small>
             ` : ''}
           </div>
-          <button class="btn btn-sm btn-outline-danger btn-delete ms-2" 
-                  data-id="${eintrag.id}" 
-                  data-typ="${eintrag.typ}" 
-                  title="Löschen">
-            <i class="bi bi-trash"></i>
-          </button>
+          <div class="btn-group btn-group-sm ms-2">
+            <button class="btn btn-outline-primary btn-edit" 
+                    data-id="${eintrag.id}" 
+                    data-typ="${eintrag.typ}" 
+                    title="Bearbeiten">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-outline-danger btn-delete" 
+                    data-id="${eintrag.id}" 
+                    data-typ="${eintrag.typ}" 
+                    title="Löschen">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -585,44 +589,488 @@ class DetailDialog extends DialogBase {
   }
 
   /**
-   * Initialisiert Event-Listener für Löschen-Buttons
+   * Initialisiert Event-Listener für Löschen- und Bearbeiten-Buttons
    */
-  _initDeleteListeners(modalElement, mitarbeiterId, modal, jahr) {
+  _initActionListeners(modalElement, mitarbeiterId, modal, jahr) {
     modalElement.addEventListener('click', async (e) => {
       const deleteBtn = e.target.closest('.btn-delete');
-      if (!deleteBtn) return;
+      const editBtn = e.target.closest('.btn-edit');
+      
+      if (deleteBtn) {
+        await this._handleDelete(deleteBtn, mitarbeiterId, modal, jahr);
+      } else if (editBtn) {
+        await this._handleEdit(editBtn, mitarbeiterId, modal, jahr);
+      }
+    });
+  }
 
-      const id = parseInt(deleteBtn.dataset.id);
-      const typ = deleteBtn.dataset.typ;
+  /**
+   * Behandelt Löschen-Aktion
+   */
+  async _handleDelete(deleteBtn, mitarbeiterId, modal, jahr) {
+    const id = parseInt(deleteBtn.dataset.id);
+    const typ = deleteBtn.dataset.typ;
 
-      if (!confirm(`Möchten Sie diesen ${this._getTypLabel(typ)}-Eintrag wirklich löschen?`)) {
-        return;
+    if (!confirm(`Möchten Sie diesen ${this._getTypLabel(typ)}-Eintrag wirklich löschen?`)) {
+      return;
+    }
+
+    try {
+      const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
+      
+      const result = await this.dataManager.db.run(
+        `DELETE FROM ${tabelle} WHERE id = ?`,
+        [id]
+      );
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
+      
+      this.dataManager.invalidateCache();
+      
+      modal.hide();
+      setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      showNotification('Fehler', error.message, 'danger');
+    }
+  }
+
+  /**
+   * Behandelt Bearbeiten-Aktion
+   */
+  async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
+    const id = parseInt(editBtn.dataset.id);
+    const typ = editBtn.dataset.typ;
+
+    modal.hide();
+
+    // Lade den Eintrag
+    const eintrag = await this._ladeEintrag(id, typ);
+    if (!eintrag) {
+      showNotification('Fehler', 'Eintrag nicht gefunden', 'danger');
+      return;
+    }
+
+    // Zeige entsprechenden Bearbeiten-Dialog
+    switch (typ) {
+      case 'urlaub':
+        await this._zeigeUrlaubBearbeiten(eintrag, mitarbeiterId, jahr);
+        break;
+      case 'krankheit':
+        await this._zeigeKrankheitBearbeiten(eintrag, mitarbeiterId, jahr);
+        break;
+      case 'schulung':
+        await this._zeigeSchulungBearbeiten(eintrag, mitarbeiterId, jahr);
+        break;
+      case 'ueberstunden':
+        await this._zeigeUeberstundenBearbeiten(eintrag, mitarbeiterId, jahr);
+        break;
+    }
+  }
+
+  /**
+   * Lädt einen einzelnen Eintrag
+   */
+  async _ladeEintrag(id, typ) {
+    const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
+    const result = await this.dataManager.db.get(
+      `SELECT * FROM ${tabelle} WHERE id = ?`,
+      [id]
+    );
+    return result.success ? result.data : null;
+  }
+
+  /**
+   * Zeigt Urlaub-Bearbeiten Dialog
+   */
+  async _zeigeUrlaubBearbeiten(eintrag, mitarbeiterId, jahr) {
+    const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+    const restUrlaub = stat ? stat.urlaub_rest : 0;
+    const maxUrlaub = restUrlaub + eintrag.tage; // Aktueller Rest + die Tage dieses Eintrags
+
+    const modalHtml = `
+      <div class="modal fade" id="bearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Urlaub bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="alert alert-info mb-3">
+                <strong>Verfügbarer Urlaub (inkl. diesem Eintrag):</strong> ${maxUrlaub.toFixed(1)} Tage
+              </div>
+              <form id="bearbeitenForm">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${eintrag.von_datum}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${eintrag.bis_datum}" required>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Urlaubstage: <span id="dauerAnzeige" class="fw-bold">${eintrag.tage.toFixed(1)}</span></label>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notizen</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-success" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('bearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const vonDatum = document.getElementById('vonDatum').value;
+      const bisDatum = document.getElementById('bisDatum').value;
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = parseFloat(dauerAnzeige);
+      const notiz = document.getElementById('notiz').value || null;
+
+      if (tage > maxUrlaub) {
+        showNotification('Fehler', `Nicht genügend Urlaub! Verfügbar: ${maxUrlaub.toFixed(1)} Tage`, 'danger');
+        return false;
       }
 
       try {
-        // Bestimme Tabellennamen
-        const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
-        
-        const result = await this.dataManager.db.run(
-          `DELETE FROM ${tabelle} WHERE id = ?`,
-          [id]
-        );
+        const result = await this.dataManager.db.run(`
+          UPDATE urlaub 
+          SET von_datum = ?, bis_datum = ?, tage = ?, notiz = ?
+          WHERE id = ?
+        `, [vonDatum, bisDatum, tage, notiz, eintrag.id]);
 
         if (!result.success) {
           throw new Error(result.error);
         }
 
-        showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
-        
-        // Cache invalidieren
+        showNotification('Erfolg', 'Urlaub wurde aktualisiert', 'success');
         this.dataManager.invalidateCache();
-        
-        // Dialog neu laden
-        modal.hide();
         setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        return true;
       } catch (error) {
-        console.error('Fehler beim Löschen:', error);
         showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+
+    // Berechnung für Dauer
+    setTimeout(async () => {
+      const vonInput = document.getElementById('vonDatum');
+      const bisInput = document.getElementById('bisDatum');
+      const dauerAnzeige = document.getElementById('dauerAnzeige');
+
+      const berechne = async () => {
+        if (vonInput.value && bisInput.value) {
+          const tage = await berechneArbeitstageAsync(vonInput.value, bisInput.value);
+          dauerAnzeige.textContent = tage.toFixed(1);
+        }
+      };
+
+      vonInput.addEventListener('change', berechne);
+      bisInput.addEventListener('change', berechne);
+    }, 100);
+  }
+
+  /**
+   * Zeigt Krankheit-Bearbeiten Dialog
+   */
+  async _zeigeKrankheitBearbeiten(eintrag, mitarbeiterId, jahr) {
+    const modalHtml = `
+      <div class="modal fade" id="bearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Krankheit bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="bearbeitenForm">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${eintrag.von_datum}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${eintrag.bis_datum}" required>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Krankheitstage: <span id="dauerAnzeige" class="fw-bold">${eintrag.tage.toFixed(1)}</span></label>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notizen</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-danger" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('bearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const vonDatum = document.getElementById('vonDatum').value;
+      const bisDatum = document.getElementById('bisDatum').value;
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = parseFloat(dauerAnzeige);
+      const notiz = document.getElementById('notiz').value || null;
+
+      try {
+        const result = await this.dataManager.db.run(`
+          UPDATE krankheit 
+          SET von_datum = ?, bis_datum = ?, tage = ?, notiz = ?
+          WHERE id = ?
+        `, [vonDatum, bisDatum, tage, notiz, eintrag.id]);
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showNotification('Erfolg', 'Krankheit wurde aktualisiert', 'success');
+        this.dataManager.invalidateCache();
+        setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+
+    // Berechnung
+    setTimeout(async () => {
+      const vonInput = document.getElementById('vonDatum');
+      const bisInput = document.getElementById('bisDatum');
+      const dauerAnzeige = document.getElementById('dauerAnzeige');
+
+      const berechne = async () => {
+        if (vonInput.value && bisInput.value) {
+          const tage = await berechneArbeitstageAsync(vonInput.value, bisInput.value);
+          dauerAnzeige.textContent = tage.toFixed(1);
+        }
+      };
+
+      vonInput.addEventListener('change', berechne);
+      bisInput.addEventListener('change', berechne);
+    }, 100);
+  }
+
+  /**
+   * Zeigt Schulung-Bearbeiten Dialog
+   */
+  async _zeigeSchulungBearbeiten(eintrag, mitarbeiterId, jahr) {
+    // Berechne bis_datum aus datum + dauer_tage
+    const vonDate = new Date(eintrag.datum);
+    const bisDate = new Date(vonDate);
+    bisDate.setDate(bisDate.getDate() + Math.ceil(eintrag.dauer_tage) - 1);
+    const bisDatum = bisDate.toISOString().split('T')[0];
+
+    const modalHtml = `
+      <div class="modal fade" id="bearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Schulung bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="bearbeitenForm">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${eintrag.datum}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${bisDatum}" required>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Schulungstage: <span id="dauerAnzeige" class="fw-bold">${eintrag.dauer_tage.toFixed(1)}</span></label>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Titel</label>
+                  <input type="text" class="form-control" id="titel" value="${eintrag.titel || ''}">
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notizen</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-info" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('bearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const vonDatum = document.getElementById('vonDatum').value;
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = parseFloat(dauerAnzeige);
+      const titel = document.getElementById('titel').value || null;
+      const notiz = document.getElementById('notiz').value || null;
+
+      try {
+        const result = await this.dataManager.db.run(`
+          UPDATE schulung 
+          SET datum = ?, dauer_tage = ?, titel = ?, notiz = ?
+          WHERE id = ?
+        `, [vonDatum, tage, titel, notiz, eintrag.id]);
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showNotification('Erfolg', 'Schulung wurde aktualisiert', 'success');
+        this.dataManager.invalidateCache();
+        setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+
+    // Berechnung
+    setTimeout(async () => {
+      const vonInput = document.getElementById('vonDatum');
+      const bisInput = document.getElementById('bisDatum');
+      const dauerAnzeige = document.getElementById('dauerAnzeige');
+
+      const berechne = async () => {
+        if (vonInput.value && bisInput.value) {
+          const tage = await berechneArbeitstageAsync(vonInput.value, bisInput.value);
+          dauerAnzeige.textContent = tage.toFixed(1);
+        }
+      };
+
+      vonInput.addEventListener('change', berechne);
+      bisInput.addEventListener('change', berechne);
+    }, 100);
+  }
+
+  /**
+   * Zeigt Überstunden-Bearbeiten Dialog
+   */
+  async _zeigeUeberstundenBearbeiten(eintrag, mitarbeiterId, jahr) {
+    const modalHtml = `
+      <div class="modal fade" id="bearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Überstunden bearbeiten
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="bearbeitenForm">
+                <div class="mb-3">
+                  <label class="form-label">Datum *</label>
+                  <input type="date" class="form-control" id="datum" value="${eintrag.datum}" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Stunden *</label>
+                  <input type="number" class="form-control" id="stunden" value="${eintrag.stunden}" 
+                         min="-100" max="100" step="0.25" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Notiz</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-warning" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('bearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const datum = document.getElementById('datum').value;
+      const stunden = parseFloat(document.getElementById('stunden').value);
+      const notiz = document.getElementById('notiz').value || null;
+
+      try {
+        const result = await this.dataManager.db.run(`
+          UPDATE ueberstunden 
+          SET datum = ?, stunden = ?, notiz = ?
+          WHERE id = ?
+        `, [datum, stunden, notiz, eintrag.id]);
+
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+
+        showNotification('Erfolg', 'Überstunden wurden aktualisiert', 'success');
+        this.dataManager.invalidateCache();
+        setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
       }
     });
   }
