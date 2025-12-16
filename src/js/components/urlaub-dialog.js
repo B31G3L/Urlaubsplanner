@@ -1,74 +1,104 @@
 /**
- * Urlaubs-Dialog
- * Urlaub hinzufügen und bearbeiten
+ * Urlaub-Dialog
+ * Urlaub eintragen mit Feiertags-Berücksichtigung
  * 
- * FIX: Von/Bis Datum wird nicht mehr überschrieben beim Tab-Wechsel
+ * FIXES:
+ * - Race Condition bei Event-Listener Initialisierung behoben
+ * - Bessere Fehlerbehandlung
+ * - NEU: Validierung dass Urlaub nicht ins Minus gehen kann
  */
 
 class UrlaubDialog extends DialogBase {
   /**
-   * Zeigt Urlaub Hinzufügen Dialog
+   * Zeigt Urlaub Eintragen Dialog
    */
-  async zeigeUrlaubHinzufuegen(mitarbeiterId, callback) {
-    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
-    if (!mitarbeiter) {
-      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
-      return;
-    }
+  async zeigeUrlaubDialog(mitarbeiterId, callback) {
+    const heute = new Date();
+    const formatDate = (date) => date.toISOString().split('T')[0];
+
+    // Hole aktuelle Statistik für Resturlaub-Anzeige
+    const statistik = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
+    const restUrlaub = statistik ? statistik.urlaub_rest : 0;
 
     const modalHtml = `
       <div class="modal fade" id="urlaubModal" tabindex="-1">
         <div class="modal-dialog">
           <div class="modal-content">
-            <div class="modal-header">
+            <div class="modal-header bg-success text-white">
               <h5 class="modal-title">
-                <i class="bi bi-calendar-plus"></i> Urlaub hinzufügen
+                <i class="bi bi-calendar-plus"></i> Urlaub eintragen
               </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label fw-bold">
-                  <i class="bi bi-person"></i> ${mitarbeiter.vorname} ${mitarbeiter.nachname}
-                </label>
+              <!-- Resturlaub-Anzeige -->
+              <div class="alert ${restUrlaub > 5 ? 'alert-success' : restUrlaub > 0 ? 'alert-warning' : 'alert-danger'} mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <span>
+                    <i class="bi bi-calendar-check"></i> 
+                    <strong>Verfügbarer Resturlaub:</strong>
+                  </span>
+                  <span class="fs-5 fw-bold" id="restUrlaubAnzeige">${restUrlaub.toFixed(1)} Tage</span>
+                </div>
               </div>
 
               <form id="urlaubForm">
                 <div class="row">
                   <div class="col-md-6 mb-3">
                     <label class="form-label">Von *</label>
-                    <input type="date" class="form-control" id="urlaubVon" required>
+                    <input type="date" class="form-control" id="vonDatum" value="${formatDate(heute)}" required>
                   </div>
                   <div class="col-md-6 mb-3">
                     <label class="form-label">Bis *</label>
-                    <input type="date" class="form-control" id="urlaubBis" required>
+                    <input type="date" class="form-control" id="bisDatum" value="${formatDate(heute)}" required>
                   </div>
                 </div>
 
                 <div class="mb-3">
-                  <label class="form-label">Anzahl Tage</label>
-                  <input type="number" class="form-control" id="urlaubTage" step="0.5" min="0.5" readonly>
-                  <small class="form-text text-muted">Wird automatisch berechnet</small>
+                  <div class="d-flex justify-content-between align-items-center">
+                    <label class="form-label mb-0">
+                      Urlaubstage: <span id="dauerAnzeige" class="fw-bold text-success">1</span>
+                    </label>
+                    <small class="text-muted" id="berechnungsInfo">(ohne Wochenenden & Feiertage)</small>
+                  </div>
+                  
+                  <!-- Warnung wenn zu viel Urlaub -->
+                  <div id="urlaubWarnung" class="alert alert-danger mt-2 d-none">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Achtung:</strong> Die gewählte Anzahl Tage übersteigt den verfügbaren Resturlaub!
+                  </div>
+                  
+                  <div class="mt-2">
+                    <small class="text-muted d-block mb-1">Schnellauswahl:</small>
+                    <div class="d-flex gap-2 flex-wrap">
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="0.5">Halber Tag</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="1">1 Tag</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="2">2 Tage</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="3">3 Tage</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="5">1 Woche</button>
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="10">2 Wochen</button>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label">Typ *</label>
-                  <select class="form-select" id="urlaubTyp" required>
-                    <option value="Urlaub">Urlaub</option>
-                    <option value="Sonderurlaub">Sonderurlaub</option>
-                    <option value="Unbezahlt">Unbezahlt</option>
-                  </select>
-                </div>
+                <!-- Feiertags-Hinweise Container -->
+                <div id="feiertagsHinweise"></div>
+
+                <!-- Veranstaltungs-Hinweise Container -->
+                <div id="veranstaltungsHinweise"></div>
+
+                <!-- Kollegen-Hinweise Container -->
+                <div id="kollegenHinweise"></div>
 
                 <div class="mb-3">
-                  <label class="form-label">Bemerkung</label>
-                  <textarea class="form-control" id="urlaubBemerkung" rows="2"></textarea>
+                  <label class="form-label">Notizen</label>
+                  <textarea class="form-control" id="notiz" rows="2" placeholder="Optionale Notizen..."></textarea>
                 </div>
               </form>
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-              <button type="button" class="btn btn-primary" id="btnSpeichern">
+              <button type="button" class="btn btn-success" id="btnSpeichern">
                 <i class="bi bi-check-lg"></i> Speichern
               </button>
             </div>
@@ -77,6 +107,7 @@ class UrlaubDialog extends DialogBase {
       </div>
     `;
 
+    // FIX: showModal gibt jetzt ein Promise zurück, das nach Modal-Animation resolved
     await this.showModal(modalHtml, async () => {
       const form = document.getElementById('urlaubForm');
       if (!form.checkValidity()) {
@@ -84,25 +115,32 @@ class UrlaubDialog extends DialogBase {
         return false;
       }
 
-      const von = document.getElementById('urlaubVon').value;
-      const bis = document.getElementById('urlaubBis').value;
-      
-      if (von > bis) {
-        showNotification('Fehler', 'Das End-Datum muss nach dem Start-Datum liegen', 'warning');
+      const vonDatum = document.getElementById('vonDatum').value;
+      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
+      const tage = parseFloat(dauerAnzeige);
+
+      if (isNaN(tage) || tage <= 0) {
+        showNotification('Fehler', 'Ungültige Anzahl Urlaubstage', 'danger');
         return false;
       }
 
-      const daten = {
-        von: von,
-        bis: bis,
-        tage: parseFloat(document.getElementById('urlaubTage').value),
-        typ: document.getElementById('urlaubTyp').value,
-        bemerkung: document.getElementById('urlaubBemerkung').value || null
+      // VALIDIERUNG: Prüfe ob genug Resturlaub vorhanden ist
+      if (tage > restUrlaub) {
+        showNotification('Fehler', `Nicht genügend Resturlaub! Verfügbar: ${restUrlaub.toFixed(1)} Tage, Angefragt: ${tage} Tage`, 'danger');
+        return false;
+      }
+
+      const eintrag = {
+        typ: 'urlaub',
+        mitarbeiter_id: mitarbeiterId,
+        datum: vonDatum,
+        wert: tage,
+        beschreibung: document.getElementById('notiz').value || null
       };
 
       try {
-        await this.dataManager.urlaubHinzufuegen(mitarbeiterId, daten);
-        showNotification('Erfolg', 'Urlaub wurde hinzugefügt', 'success');
+        await this.dataManager.speichereEintrag(eintrag);
+        showNotification('Erfolg', 'Urlaub wurde eingetragen', 'success');
         if (callback) await callback();
         return true;
       } catch (error) {
@@ -111,396 +149,176 @@ class UrlaubDialog extends DialogBase {
       }
     });
 
-    // FIX: Verbesserte Datum-Logik - nur noch einmal beim Laden
-    setTimeout(() => {
-      const vonField = document.getElementById('urlaubVon');
-      const bisField = document.getElementById('urlaubBis');
-      const tageField = document.getElementById('urlaubTage');
-
-      // Setze heutiges Datum als Standardwert
-      const heute = new Date().toISOString().split('T')[0];
-      vonField.value = heute;
-      bisField.value = heute;
-
-      // Flag um zu verhindern dass Bis überschrieben wird
-      let bisManuallyEdited = false;
-
-      /**
-       * Berechnet Arbeitstage zwischen zwei Daten
-       */
-      const berechneArbeitstage = (von, bis) => {
-        if (!von || !bis) return 0;
-        
-        const start = new Date(von);
-        const end = new Date(bis);
-        let tage = 0;
-        
-        const current = new Date(start);
-        while (current <= end) {
-          const dayOfWeek = current.getDay();
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Nicht Sonntag (0) oder Samstag (6)
-            tage++;
-          }
-          current.setDate(current.getDate() + 1);
-        }
-        
-        return tage;
-      };
-
-      /**
-       * Aktualisiert die Tage-Berechnung
-       */
-      const aktualisiereTage = () => {
-        const von = vonField.value;
-        const bis = bisField.value;
-        
-        if (von && bis) {
-          const tage = berechneArbeitstage(von, bis);
-          tageField.value = tage;
-        }
-      };
-
-      // FIX: Von-Feld Change - NUR wenn Bis NICHT manuell bearbeitet wurde
-      vonField.addEventListener('change', () => {
-        const von = vonField.value;
-        
-        // Setze Bis nur automatisch, wenn es noch nicht manuell geändert wurde
-        if (!bisManuallyEdited && von) {
-          bisField.value = von;
-        }
-        
-        aktualisiereTage();
-      });
-
-      // FIX: Bis-Feld Input - markiere als manuell bearbeitet
-      bisField.addEventListener('input', () => {
-        bisManuallyEdited = true;
-      });
-
-      // Bis-Feld Change - berechne Tage
-      bisField.addEventListener('change', () => {
-        aktualisiereTage();
-      });
-
-      // Initiale Berechnung
-      aktualisiereTage();
-    }, 100);
+    // FIX: Event-Listener nach Modal-Animation initialisieren (Promise-basiert statt setTimeout)
+    await this._initUrlaubEventListener(mitarbeiterId, restUrlaub);
   }
 
   /**
-   * Zeigt Urlaub Bearbeiten Dialog
+   * Initialisiert Event-Listener für Urlaub-Dialog
+   * FIX: Separate Methode für bessere Testbarkeit und Fehlerbehandlung
    */
-  async zeigeUrlaubBearbeiten(urlaubId, callback) {
-    const urlaub = await this.dataManager.getUrlaub(urlaubId);
-    if (!urlaub) {
-      showNotification('Fehler', 'Urlaub nicht gefunden', 'danger');
+  async _initUrlaubEventListener(mitarbeiterId, restUrlaub) {
+    const vonDatumInput = document.getElementById('vonDatum');
+    const bisDatumInput = document.getElementById('bisDatum');
+    const dauerAnzeige = document.getElementById('dauerAnzeige');
+    const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
+    const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
+    const veranstaltungsHinweiseDiv = document.getElementById('veranstaltungsHinweise');
+    const urlaubWarnung = document.getElementById('urlaubWarnung');
+    const btnSpeichern = document.getElementById('btnSpeichern');
+
+    // FIX: Prüfe ob Elemente existieren
+    if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) {
+      console.warn('Urlaub-Dialog Elemente nicht gefunden');
       return;
     }
 
-    const mitarbeiter = await this.dataManager.getMitarbeiter(urlaub.mitarbeiter_id);
-
-    const modalHtml = `
-      <div class="modal fade" id="urlaubBearbeitenModal" tabindex="-1">
-        <div class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="bi bi-pencil-square"></i> Urlaub bearbeiten
-              </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label fw-bold">
-                  <i class="bi bi-person"></i> ${mitarbeiter.vorname} ${mitarbeiter.nachname}
-                </label>
-              </div>
-
-              <form id="urlaubBearbeitenForm">
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Von *</label>
-                    <input type="date" class="form-control" id="urlaubVon" value="${urlaub.von}" required>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    <label class="form-label">Bis *</label>
-                    <input type="date" class="form-control" id="urlaubBis" value="${urlaub.bis}" required>
-                  </div>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Anzahl Tage</label>
-                  <input type="number" class="form-control" id="urlaubTage" value="${urlaub.tage}" step="0.5" min="0.5" readonly>
-                  <small class="form-text text-muted">Wird automatisch berechnet</small>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Typ *</label>
-                  <select class="form-select" id="urlaubTyp" required>
-                    <option value="Urlaub" ${urlaub.typ === 'Urlaub' ? 'selected' : ''}>Urlaub</option>
-                    <option value="Sonderurlaub" ${urlaub.typ === 'Sonderurlaub' ? 'selected' : ''}>Sonderurlaub</option>
-                    <option value="Unbezahlt" ${urlaub.typ === 'Unbezahlt' ? 'selected' : ''}>Unbezahlt</option>
-                  </select>
-                </div>
-
-                <div class="mb-3">
-                  <label class="form-label">Bemerkung</label>
-                  <textarea class="form-control" id="urlaubBemerkung" rows="2">${urlaub.bemerkung || ''}</textarea>
-                </div>
-              </form>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-              <button type="button" class="btn btn-primary" id="btnSpeichern">
-                <i class="bi bi-check-lg"></i> Speichern
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    await this.showModal(modalHtml, async () => {
-      const form = document.getElementById('urlaubBearbeitenForm');
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return false;
-      }
-
-      const von = document.getElementById('urlaubVon').value;
-      const bis = document.getElementById('urlaubBis').value;
-      
-      if (von > bis) {
-        showNotification('Fehler', 'Das End-Datum muss nach dem Start-Datum liegen', 'warning');
-        return false;
-      }
-
-      const daten = {
-        von: von,
-        bis: bis,
-        tage: parseFloat(document.getElementById('urlaubTage').value),
-        typ: document.getElementById('urlaubTyp').value,
-        bemerkung: document.getElementById('urlaubBemerkung').value || null
-      };
-
-      try {
-        await this.dataManager.urlaubAktualisieren(urlaubId, daten);
-        showNotification('Erfolg', 'Urlaub wurde aktualisiert', 'success');
-        if (callback) await callback();
-        return true;
-      } catch (error) {
-        showNotification('Fehler', error.message, 'danger');
-        return false;
-      }
-    });
-
-    // FIX: Gleiche verbesserte Logik für Bearbeiten-Dialog
-    setTimeout(() => {
-      const vonField = document.getElementById('urlaubVon');
-      const bisField = document.getElementById('urlaubBis');
-      const tageField = document.getElementById('urlaubTage');
-
-      // Flag um zu verhindern dass Bis überschrieben wird
-      let bisManuallyEdited = false;
-
-      const berechneArbeitstage = (von, bis) => {
-        if (!von || !bis) return 0;
-        
-        const start = new Date(von);
-        const end = new Date(bis);
-        let tage = 0;
-        
-        const current = new Date(start);
-        while (current <= end) {
-          const dayOfWeek = current.getDay();
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            tage++;
-          }
-          current.setDate(current.getDate() + 1);
+    /**
+     * Prüft ob die gewählten Tage den Resturlaub übersteigen
+     */
+    const pruefeUrlaubGrenze = (tage) => {
+      if (tage > restUrlaub) {
+        if (urlaubWarnung) urlaubWarnung.classList.remove('d-none');
+        if (btnSpeichern) {
+          btnSpeichern.disabled = true;
+          btnSpeichern.classList.add('btn-secondary');
+          btnSpeichern.classList.remove('btn-success');
         }
-        
-        return tage;
-      };
-
-      const aktualisiereTage = () => {
-        const von = vonField.value;
-        const bis = bisField.value;
-        
-        if (von && bis) {
-          const tage = berechneArbeitstage(von, bis);
-          tageField.value = tage;
+        if (dauerAnzeige) {
+          dauerAnzeige.classList.remove('text-success');
+          dauerAnzeige.classList.add('text-danger');
         }
-      };
-
-      // FIX: Von-Feld Change - NUR wenn Bis NICHT manuell bearbeitet wurde
-      vonField.addEventListener('change', () => {
-        const von = vonField.value;
-        
-        // Setze Bis nur automatisch, wenn es noch nicht manuell geändert wurde
-        if (!bisManuallyEdited && von && !bisField.value) {
-          bisField.value = von;
-        }
-        
-        aktualisiereTage();
-      });
-
-      // FIX: Bis-Feld Input - markiere als manuell bearbeitet
-      bisField.addEventListener('input', () => {
-        bisManuallyEdited = true;
-      });
-
-      // Bis-Feld Change - berechne Tage
-      bisField.addEventListener('change', () => {
-        aktualisiereTage();
-      });
-
-      // Initiale Berechnung
-      aktualisiereTage();
-    }, 100);
-  }
-
-  /**
-   * Zeigt alle Urlaube eines Mitarbeiters
-   */
-  async zeigeUrlaubeVerwalten(mitarbeiterId, callback) {
-    const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
-    if (!mitarbeiter) {
-      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
-      return;
-    }
-
-    const urlaube = await this.dataManager.getAlleUrlaubeVonMitarbeiter(mitarbeiterId);
-
-    const urlaubeRows = urlaube.map(urlaub => {
-      const vonDatum = new Date(urlaub.von).toLocaleDateString('de-DE');
-      const bisDatum = new Date(urlaub.bis).toLocaleDateString('de-DE');
-      
-      let typBadge = '';
-      if (urlaub.typ === 'Urlaub') {
-        typBadge = '<span class="badge bg-success">Urlaub</span>';
-      } else if (urlaub.typ === 'Sonderurlaub') {
-        typBadge = '<span class="badge bg-info">Sonderurlaub</span>';
       } else {
-        typBadge = '<span class="badge bg-warning">Unbezahlt</span>';
-      }
-
-      return `
-        <tr>
-          <td>${vonDatum}</td>
-          <td>${bisDatum}</td>
-          <td>${urlaub.tage}</td>
-          <td>${typBadge}</td>
-          <td>${urlaub.bemerkung || '-'}</td>
-          <td>
-            <div class="btn-group btn-group-sm">
-              <button class="btn btn-outline-primary btn-bearbeiten" data-id="${urlaub.id}" title="Bearbeiten">
-                <i class="bi bi-pencil"></i>
-              </button>
-              <button class="btn btn-outline-danger btn-loeschen" data-id="${urlaub.id}" title="Löschen">
-                <i class="bi bi-trash"></i>
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    const modalHtml = `
-      <div class="modal fade" id="urlaubeVerwaltungModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h5 class="modal-title">
-                <i class="bi bi-calendar-week"></i> Urlaube verwalten - ${mitarbeiter.vorname} ${mitarbeiter.nachname}
-              </h5>
-              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-              <div class="table-responsive">
-                <table class="table table-hover table-striped">
-                  <thead class="table-dark">
-                    <tr>
-                      <th>Von</th>
-                      <th>Bis</th>
-                      <th>Tage</th>
-                      <th>Typ</th>
-                      <th>Bemerkung</th>
-                      <th>Aktionen</th>
-                    </tr>
-                  </thead>
-                  <tbody id="urlaubeVerwaltungTabelleBody">
-                    ${urlaubeRows || '<tr><td colspan="6" class="text-center text-muted">Keine Urlaube vorhanden</td></tr>'}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Schließen</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Entferne alte Modals
-    const oldModals = document.querySelectorAll('.modal');
-    oldModals.forEach(m => {
-      const existingModal = bootstrap.Modal.getInstance(m);
-      if (existingModal) existingModal.dispose();
-      m.remove();
-    });
-
-    // Füge neues Modal hinzu
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-
-    // Modal initialisieren
-    const modalElement = document.querySelector('#urlaubeVerwaltungModal');
-    const modal = new bootstrap.Modal(modalElement);
-
-    // Event-Listener
-    const tabelleBody = modalElement.querySelector('#urlaubeVerwaltungTabelleBody');
-
-    tabelleBody.addEventListener('click', async (e) => {
-      const bearbeitenBtn = e.target.closest('.btn-bearbeiten');
-      const loeschenBtn = e.target.closest('.btn-loeschen');
-
-      if (bearbeitenBtn) {
-        const urlaubId = parseInt(bearbeitenBtn.dataset.id);
-        modal.hide();
-
-        await this.zeigeUrlaubBearbeiten(urlaubId, async () => {
-          if (callback) await callback();
-          setTimeout(() => this.zeigeUrlaubeVerwalten(mitarbeiterId, callback), 300);
-        });
-      } else if (loeschenBtn) {
-        const urlaubId = parseInt(loeschenBtn.dataset.id);
-
-        if (confirm('Möchten Sie diesen Urlaub wirklich löschen?')) {
-          try {
-            await this.dataManager.urlaubLoeschen(urlaubId);
-            showNotification('Erfolg', 'Urlaub wurde gelöscht', 'success');
-            modal.hide();
-            if (callback) await callback();
-            setTimeout(() => this.zeigeUrlaubeVerwalten(mitarbeiterId, callback), 300);
-          } catch (error) {
-            showNotification('Fehler', error.message, 'danger');
-          }
+        if (urlaubWarnung) urlaubWarnung.classList.add('d-none');
+        if (btnSpeichern) {
+          btnSpeichern.disabled = false;
+          btnSpeichern.classList.remove('btn-secondary');
+          btnSpeichern.classList.add('btn-success');
+        }
+        if (dauerAnzeige) {
+          dauerAnzeige.classList.add('text-success');
+          dauerAnzeige.classList.remove('text-danger');
         }
       }
+    };
+
+    const aktualisiereHinweise = async () => {
+      const von = vonDatumInput.value;
+      const bis = bisDatumInput.value;
+      
+      if (!von || !bis) return;
+
+      if (new Date(bis) < new Date(von)) {
+        bisDatumInput.value = von;
+        dauerAnzeige.textContent = '1';
+        if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+        pruefeUrlaubGrenze(1);
+        return;
+      }
+      
+      try {
+        // Berechne Arbeitstage MIT Feiertagen (async)
+        const arbeitstage = await berechneArbeitstageAsync(von, bis);
+        dauerAnzeige.textContent = arbeitstage;
+        
+        // Prüfe Urlaubsgrenze
+        pruefeUrlaubGrenze(arbeitstage);
+
+        // Hole Feiertage im Zeitraum für Anzeige
+        if (feiertagsHinweiseDiv) {
+          const feiertage = await getFeiertageImZeitraum(von, bis);
+          feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+        }
+
+        // Prüfe Veranstaltungen
+        if (veranstaltungsHinweiseDiv) {
+          const veranstaltungen = await this.pruefeVeranstaltungen(von, bis);
+          veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+        }
+
+        // Prüfe Kollegen-Abwesenheiten
+        if (kollegenHinweiseDiv) {
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'urlaub');
+          kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+        }
+      } catch (error) {
+        console.error('Fehler beim Aktualisieren der Hinweise:', error);
+      }
+    };
+
+    vonDatumInput.addEventListener('change', async () => {
+      if (bisDatumInput.value < vonDatumInput.value) {
+        bisDatumInput.value = vonDatumInput.value;
+      }
+      bisDatumInput.min = vonDatumInput.value;
+      await aktualisiereHinweise();
     });
 
-    // Modal anzeigen
-    modal.show();
+    bisDatumInput.addEventListener('change', aktualisiereHinweise);
 
-    // Cleanup nach Schließen
-    modalElement.addEventListener('hidden.bs.modal', () => {
-      modal.dispose();
-      modalElement.remove();
+    // Setze initiales min für Bis-Datum
+    bisDatumInput.min = vonDatumInput.value;
+
+    // Initial prüfen
+    await aktualisiereHinweise();
+
+    // Dauer-Buttons - jetzt mit async Feiertags-Berechnung
+    document.querySelectorAll('.dauer-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tage = parseFloat(btn.dataset.tage);
+        const von = vonDatumInput.value;
+        
+        if (!von) return;
+
+        try {
+          if (tage === 0.5) {
+            bisDatumInput.value = von;
+            dauerAnzeige.textContent = '0.5';
+            if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+            pruefeUrlaubGrenze(0.5);
+          } else {
+            // Berechne Enddatum MIT Feiertagen
+            const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
+            bisDatumInput.value = bis;
+            
+            // Aktualisiere Anzeige
+            const arbeitstage = await berechneArbeitstageAsync(von, bis);
+            dauerAnzeige.textContent = arbeitstage;
+            
+            // Prüfe Urlaubsgrenze
+            pruefeUrlaubGrenze(arbeitstage);
+            
+            // Hole Feiertage im Zeitraum
+            if (feiertagsHinweiseDiv) {
+              const feiertage = await getFeiertageImZeitraum(von, bis);
+              feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+            }
+          }
+
+          // Aktualisiere Hinweise nach Änderung
+          if (veranstaltungsHinweiseDiv) {
+            const veranstaltungen = await this.pruefeVeranstaltungen(vonDatumInput.value, bisDatumInput.value);
+            veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
+          }
+
+          if (kollegenHinweiseDiv) {
+            const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+              mitarbeiterId, 
+              vonDatumInput.value, 
+              bisDatumInput.value, 
+              'urlaub'
+            );
+            kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+          }
+        } catch (error) {
+          console.error('Fehler bei Dauer-Button:', error);
+        }
+      });
     });
   }
 }
 
 // Export für Node.js
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = UrlaubsDialog;
+  module.exports = UrlaubDialog;
 }
