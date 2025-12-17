@@ -3,26 +3,25 @@
  * Zeigt alle Einträge eines Mitarbeiters für ein Jahr an
  * Ermöglicht das Bearbeiten und Löschen von Einträgen
  * 
- * LAYOUT: Links Stammdaten + KPIs, Rechts Einträge (sortiert chronologisch)
- * NEU: Bearbeiten-Button für alle Einträge hinzugefügt
- * NEU: Filter und Sortierung für Einträge
+ * NEUES LAYOUT:
+ * - Links: ALLE Stammdaten (volle Höhe)
+ * - Rechts oben: Statistik horizontal (KPI-Karten nebeneinander)
+ * - Rechts unten: Einträge-Liste (scrollbar)
  */
 
 class DetailDialog extends DialogBase {
   constructor(dataManager) {
     super(dataManager);
-    this.filterTyp = 'alle'; // 'alle', 'urlaub', 'krankheit', 'schulung', 'ueberstunden'
-    this.sortierung = 'desc'; // 'desc' (neueste zuerst) oder 'asc' (älteste zuerst)
+    this.filterTyp = 'alle';
+    this.sortierung = 'desc';
   }
 
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
-   * Gibt ein Promise zurück das erst resolved wird wenn der Dialog geschlossen wurde
    */
   async zeigeDetails(mitarbeiterId, jahr = null) {
     jahr = jahr || this.dataManager.aktuellesJahr;
     
-    // Lade Mitarbeiter und Statistik
     const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
     if (!stat) {
       showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
@@ -30,22 +29,14 @@ class DetailDialog extends DialogBase {
     }
 
     const ma = stat.mitarbeiter;
-
-    // Lade alle Einträge für das Jahr
     const eintraege = await this._ladeAlleEintraege(mitarbeiterId, jahr);
-    
-    // Kombiniere und sortiere alle Einträge chronologisch
     const alleEintraegeSortiert = this._kombiniereUndSortiereEintraege(eintraege);
-
-    // Berechne tatsächlich gemachte Überstunden (nur positive Werte)
     const ueberstundenGemacht = await this._berechneUeberstundenGemacht(mitarbeiterId, jahr);
-
-    // Zähle Einträge nach Typ für Filter-Badges
     const anzahlNachTyp = this._zaehleEintraegeNachTyp(alleEintraegeSortiert);
 
     const modalHtml = `
       <div class="modal fade" id="detailModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-fullscreen">
           <div class="modal-content">
             <div class="modal-header bg-primary text-white">
               <h5 class="modal-title">
@@ -53,180 +44,273 @@ class DetailDialog extends DialogBase {
               </h5>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-              <!-- Button-Leiste -->
-              <div class="d-flex gap-2 mb-3 pb-3 border-bottom">
-                <button class="btn btn-outline-primary" id="btnMitarbeiterBearbeiten">
-                  <i class="bi bi-pencil"></i> Mitarbeiter bearbeiten
-                </button>
-                <div class="btn-group ms-auto">
-                  <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-download"></i> Export
-                  </button>
-                  <ul class="dropdown-menu">
-                    <li>
-                      <a class="dropdown-item" href="#" id="btnExportExcel">
-                        <i class="bi bi-file-earmark-excel text-success"></i> Als Excel exportieren
-                      </a>
-                    </li>
-                    <li>
-                      <a class="dropdown-item" href="#" id="btnExportPDF">
-                        <i class="bi bi-file-earmark-pdf text-danger"></i> Als PDF exportieren
-                      </a>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-              
-              <div class="row">
-                <!-- LINKE SPALTE: Stammdaten + KPIs -->
-                <div class="col-md-4">
-                  <!-- Stammdaten Card -->
-                  <div class="card bg-dark mb-3">
-                    <div class="card-header bg-secondary">
-                      <h6 class="mb-0"><i class="bi bi-person-badge"></i> Stammdaten</h6>
+            <div class="modal-body p-0">
+              <div class="row g-0" style="height: calc(100vh - 120px);">
+                
+                <!-- LINKE SPALTE: Alle Stammdaten (volle Höhe) -->
+                <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
+                  <div class="p-3">
+                    
+                    <!-- Buttons -->
+                    <div class="d-flex gap-2 mb-3">
+                      <button class="btn btn-outline-primary w-100" id="btnMitarbeiterBearbeiten">
+                        <i class="bi bi-pencil"></i> Bearbeiten
+                      </button>
+                      <div class="btn-group">
+                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                          <i class="bi bi-download"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                          <li><a class="dropdown-item" href="#" id="btnExportExcel">
+                            <i class="bi bi-file-earmark-excel text-success"></i> Excel
+                          </a></li>
+                          <li><a class="dropdown-item" href="#" id="btnExportPDF">
+                            <i class="bi bi-file-earmark-pdf text-danger"></i> PDF
+                          </a></li>
+                        </ul>
+                      </div>
                     </div>
-                    <div class="card-body">
-                      <table class="table table-sm table-borderless mb-0">
-                        <tr>
-                          <td class="text-muted">Abteilung:</td>
-                          <td class="text-end">
-                            <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}; font-size: 0.85rem;">
-                              ${ma.abteilung_name}
-                            </span>
-                          </td>
-                        </tr>
-                        ${ma.email ? `
-                        <tr>
-                          <td class="text-muted">Email:</td>
-                          <td class="text-end"><small>${ma.email}</small></td>
-                        </tr>
-                        ` : ''}
-                        ${ma.geburtsdatum ? `
-                        <tr>
-                          <td class="text-muted">Geburtsdatum:</td>
-                          <td class="text-end">${formatDatumAnzeige(ma.geburtsdatum)}</td>
-                        </tr>
-                        ` : ''}
-                        <tr>
-                          <td class="text-muted">Eintritt:</td>
-                          <td class="text-end">${formatDatumAnzeige(ma.eintrittsdatum)}</td>
-                        </tr>
-                        ${ma.austrittsdatum ? `
-                        <tr>
-                          <td class="text-muted">Austritt:</td>
-                          <td class="text-end">
-                            <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
-                          </td>
-                        </tr>
-                        ` : ''}
-                        <tr>
-                          <td class="text-muted">Urlaub/Jahr:</td>
-                          <td class="text-end fw-bold">${ma.urlaubstage_jahr} Tage</td>
-                        </tr>
-                        <tr>
-                          <td class="text-muted">Überstunden ${jahr}:</td>
-                          <td class="text-end fw-bold text-success">
-                            +${ueberstundenGemacht.toFixed(1)} Std.
-                          </td>
-                        </tr>
-                      </table>
+
+                    <!-- Persönliche Daten -->
+                    <div class="card bg-dark mb-3">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
+                      </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                          <tr>
+                            <td class="text-muted" style="width: 40%;">Vorname:</td>
+                            <td class="fw-bold">${ma.vorname}</td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Nachname:</td>
+                            <td class="fw-bold">${ma.nachname}</td>
+                          </tr>
+                          ${ma.email ? `
+                          <tr>
+                            <td class="text-muted">Email:</td>
+                            <td><small>${ma.email}</small></td>
+                          </tr>
+                          ` : ''}
+                          ${ma.geburtsdatum ? `
+                          <tr>
+                            <td class="text-muted">Geburtsdatum:</td>
+                            <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
+                          </tr>
+                          ` : ''}
+                        </table>
+                      </div>
                     </div>
-                  </div>
 
-                  <!-- KPI Cards -->
-                  <div class="card bg-dark mb-3">
-                    <div class="card-header bg-secondary">
-                      <h6 class="mb-0"><i class="bi bi-graph-up"></i> Statistik ${jahr}</h6>
+                    <!-- Arbeitsbeziehung -->
+                    <div class="card bg-dark mb-3">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-briefcase"></i> Arbeitsbeziehung</h6>
+                      </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                          <tr>
+                            <td class="text-muted" style="width: 40%;">Abteilung:</td>
+                            <td>
+                              <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
+                                ${ma.abteilung_name}
+                              </span>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Eintrittsdatum:</td>
+                            <td>${formatDatumAnzeige(ma.eintrittsdatum)}</td>
+                          </tr>
+                          ${ma.austrittsdatum ? `
+                          <tr>
+                            <td class="text-muted">Austrittsdatum:</td>
+                            <td>
+                              <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
+                            </td>
+                          </tr>
+                          ` : ''}
+                          <tr>
+                            <td class="text-muted">Status:</td>
+                            <td>
+                              <span class="badge ${ma.status === 'AKTIV' ? 'bg-success' : 'bg-secondary'}">
+                                ${ma.status}
+                              </span>
+                            </td>
+                          </tr>
+                        </table>
+                      </div>
                     </div>
-                    <div class="card-body p-2">
-                      <!-- Urlaub (klickbar) -->
-                      <div class="kpi-item p-2 mb-2 rounded clickable" id="clickUrlaub" 
-                           style="background-color: rgba(40, 167, 69, 0.1); border-left: 3px solid #28a745; cursor: pointer;"
-                           title="Klicken um Urlaub einzutragen">
-                        <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <small class="text-muted d-block"><i class="bi bi-calendar-check"></i> Urlaub</small>
-                            <span class="fw-bold text-success fs-5">${stat.urlaub_genommen.toFixed(1)}</span>
-                            <small class="text-muted"> / ${stat.urlaub_verfuegbar.toFixed(1)}</small>
-                          </div>
-                          <div class="text-end">
-                            <small class="text-muted d-block">Rest</small>
-                            <span class="fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
-                              ${stat.urlaub_rest.toFixed(1)}
-                            </span>
+
+                    <!-- Arbeitszeit -->
+                    <div class="card bg-dark mb-3">
+                      <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Arbeitszeit</h6>
+                      </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                          <tr>
+                            <td class="text-muted" style="width: 40%;">Wochenstunden:</td>
+                            <td class="fw-bold">${ma.wochenstunden || 40}h</td>
+                          </tr>
+                        </table>
+                        <div id="arbeitszeitmodellAnzeige" class="mt-2">
+                          <small class="text-muted d-block mb-1">Wochenplan:</small>
+                          <div class="text-muted small" style="line-height: 1.6;">
+                            Wird geladen...
                           </div>
                         </div>
+                        <button class="btn btn-sm btn-outline-info mt-2 w-100" id="btnArbeitszeitmodell">
+                          <i class="bi bi-calendar-week"></i> Bearbeiten
+                        </button>
                       </div>
+                    </div>
 
-                      <!-- Übertrag (klickbar) -->
-                      <div class="kpi-item p-2 mb-2 rounded clickable" id="clickUebertrag" 
-                           style="background-color: rgba(23, 162, 184, 0.1); border-left: 3px solid #17a2b8; cursor: pointer;"
-                           title="Klicken zum Anpassen">
+                    <!-- Urlaub ${jahr} -->
+                    <div class="card bg-dark mb-3">
+                      <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
                         <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <small class="text-muted d-block"><i class="bi bi-arrow-down-circle"></i> Übertrag ${jahr - 1}</small>
-                            <span class="fw-bold text-info fs-5">${stat.uebertrag_vorjahr.toFixed(1)}</span>
-                          </div>
-                          <i class="bi bi-pencil-square text-info"></i>
+                          <h6 class="mb-0"><i class="bi bi-calendar-check text-success"></i> Urlaub ${jahr}</h6>
+                          <i class="bi bi-plus-circle text-success"></i>
                         </div>
                       </div>
-
-                      <!-- Krankheit (klickbar) -->
-                      <div class="kpi-item p-2 mb-2 rounded clickable" id="clickKrankheit" 
-                           style="background-color: rgba(220, 53, 69, 0.1); border-left: 3px solid #dc3545; cursor: pointer;"
-                           title="Klicken um Krankheit einzutragen">
-                        <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <small class="text-muted d-block"><i class="bi bi-bandaid"></i> Krankheit</small>
-                            <span class="fw-bold text-danger fs-5">${stat.krankheitstage.toFixed(1)}</span>
-                            <small class="text-muted">Tage</small>
-                          </div>
-                          <i class="bi bi-plus-circle text-danger"></i>
-                        </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                          <tr>
+                            <td class="text-muted" style="width: 40%;">Anspruch:</td>
+                            <td class="fw-bold">${stat.urlaubsanspruch.toFixed(1)} Tage</td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Übertrag ${jahr-1}:</td>
+                            <td>
+                              <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
+                                ${stat.uebertrag_vorjahr.toFixed(1)} Tage
+                                <i class="bi bi-pencil-square text-info ms-1"></i>
+                              </span>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Verfügbar:</td>
+                            <td class="fw-bold text-info">${stat.urlaub_verfuegbar.toFixed(1)} Tage</td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Genommen:</td>
+                            <td class="fw-bold text-warning">${stat.urlaub_genommen.toFixed(1)} Tage</td>
+                          </tr>
+                          <tr class="border-top">
+                            <td class="text-muted fw-bold">Resturlaub:</td>
+                            <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
+                              ${stat.urlaub_rest.toFixed(1)} Tage
+                            </td>
+                          </tr>
+                        </table>
                       </div>
+                    </div>
 
-                      <!-- Schulung (klickbar) -->
-                      <div class="kpi-item p-2 mb-2 rounded clickable" id="clickSchulung" 
-                           style="background-color: rgba(23, 162, 184, 0.1); border-left: 3px solid #17a2b8; cursor: pointer;"
-                           title="Klicken um Schulung einzutragen">
+                    <!-- Überstunden ${jahr} -->
+                    <div class="card bg-dark">
+                      <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
                         <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <small class="text-muted d-block"><i class="bi bi-book"></i> Schulung</small>
-                            <span class="fw-bold text-info fs-5">${stat.schulungstage.toFixed(1)}</span>
-                            <small class="text-muted">Tage</small>
-                          </div>
-                          <i class="bi bi-plus-circle text-info"></i>
-                        </div>
-                      </div>
-
-                      <!-- Überstunden (klickbar) -->
-                      <div class="kpi-item p-2 rounded clickable" id="clickUeberstunden" 
-                           style="background-color: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; cursor: pointer;"
-                           title="Klicken um Überstunden einzutragen">
-                        <div class="d-flex justify-content-between align-items-center">
-                          <div>
-                            <small class="text-muted d-block"><i class="bi bi-clock"></i> Überstunden</small>
-                            <span class="fw-bold text-warning fs-5">${stat.ueberstunden >= 0 ? '+' : ''}${stat.ueberstunden.toFixed(1)}</span>
-                            <small class="text-muted">Std.</small>
-                          </div>
+                          <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
                           <i class="bi bi-plus-circle text-warning"></i>
                         </div>
                       </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                          <tr>
+                            <td class="text-muted" style="width: 40%;">Gemacht:</td>
+                            <td class="fw-bold text-success">+${ueberstundenGemacht.toFixed(1)}h</td>
+                          </tr>
+                          <tr>
+                            <td class="text-muted">Abgebaut:</td>
+                            <td class="fw-bold text-danger">${(stat.ueberstunden - ueberstundenGemacht).toFixed(1)}h</td>
+                          </tr>
+                          <tr class="border-top">
+                            <td class="text-muted fw-bold">Saldo:</td>
+                            <td class="fs-5 fw-bold ${stat.ueberstunden >= 0 ? 'text-success' : 'text-danger'}">
+                              ${stat.ueberstunden >= 0 ? '+' : ''}${stat.ueberstunden.toFixed(1)}h
+                            </td>
+                          </tr>
+                        </table>
+                      </div>
                     </div>
+
                   </div>
                 </div>
 
-                <!-- RECHTE SPALTE: Alle Einträge chronologisch sortiert -->
-                <div class="col-md-8">
-                  <div class="card bg-dark">
-                    <div class="card-header bg-secondary">
-                      <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0"><i class="bi bi-list-ul"></i> Alle Einträge</h6>
+                <!-- RECHTE SPALTE: Statistik oben + Einträge unten -->
+                <div class="col-md-8" style="display: flex; flex-direction: column;">
+                  
+                  <!-- Statistik horizontal (oben, fixes Layout) -->
+                  <div class="p-3 border-bottom" style="flex-shrink: 0; background-color: #2d2d2d;">
+                    <div class="row g-3">
+                      <!-- Krankheit -->
+                      <div class="col-md-4">
+                        <div class="card bg-dark h-100 clickable" id="clickKrankheit" style="cursor: pointer; border-left: 3px solid #dc3545;">
+                          <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                              <div>
+                                <div class="text-muted small mb-1">
+                                  <i class="bi bi-bandaid"></i> Krankheit ${jahr}
+                                </div>
+                                <div class="fs-3 fw-bold text-danger">${stat.krankheitstage.toFixed(1)}</div>
+                                <div class="text-muted small">Tage</div>
+                              </div>
+                              <i class="bi bi-plus-circle fs-4 text-danger opacity-50"></i>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Schulung -->
+                      <div class="col-md-4">
+                        <div class="card bg-dark h-100 clickable" id="clickSchulung" style="cursor: pointer; border-left: 3px solid #17a2b8;">
+                          <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                              <div>
+                                <div class="text-muted small mb-1">
+                                  <i class="bi bi-book"></i> Schulung ${jahr}
+                                </div>
+                                <div class="fs-3 fw-bold text-info">${stat.schulungstage.toFixed(1)}</div>
+                                <div class="text-muted small">Tage</div>
+                              </div>
+                              <i class="bi bi-plus-circle fs-4 text-info opacity-50"></i>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- Gesamt Einträge -->
+                      <div class="col-md-4">
+                        <div class="card bg-dark h-100" style="border-left: 3px solid #6c757d;">
+                          <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                              <div>
+                                <div class="text-muted small mb-1">
+                                  <i class="bi bi-list-ul"></i> Alle Einträge
+                                </div>
+                                <div class="fs-3 fw-bold">${alleEintraegeSortiert.length}</div>
+                                <div class="text-muted small">Einträge insgesamt</div>
+                              </div>
+                              <i class="bi bi-collection fs-4 opacity-50"></i>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Einträge-Liste (unten, scrollbar) -->
+                  <div style="flex: 1; overflow-y: auto; background-color: #1a1a1a;">
+                    <div class="p-3">
+                      <!-- Toolbar -->
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">
+                          <i class="bi bi-list-ul"></i> Alle Einträge (${alleEintraegeSortiert.length})
+                        </h6>
                         <div class="d-flex gap-2">
                           <!-- Sortierung -->
                           <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-light sortierung-btn" data-sort="desc" title="Neueste zuerst">
+                            <button type="button" class="btn btn-outline-light sortierung-btn active" data-sort="desc" title="Neueste zuerst">
                               <i class="bi bi-sort-down"></i>
                             </button>
                             <button type="button" class="btn btn-outline-light sortierung-btn" data-sort="asc" title="Älteste zuerst">
@@ -235,9 +319,9 @@ class DetailDialog extends DialogBase {
                           </div>
                         </div>
                       </div>
-                      
+
                       <!-- Filter Buttons -->
-                      <div class="d-flex gap-2 flex-wrap">
+                      <div class="d-flex gap-2 flex-wrap mb-3">
                         <button type="button" class="btn btn-sm btn-outline-secondary filter-btn active" data-filter="alle">
                           <i class="bi bi-list"></i> Alle <span class="badge bg-secondary">${alleEintraegeSortiert.length}</span>
                         </button>
@@ -254,12 +338,15 @@ class DetailDialog extends DialogBase {
                           <i class="bi bi-clock"></i> Überstunden <span class="badge bg-warning text-dark">${anzahlNachTyp.ueberstunden}</span>
                         </button>
                       </div>
-                    </div>
-                    <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;" id="eintraegeContainer">
-                      ${this._renderAlleEintraege(alleEintraegeSortiert)}
+
+                      <!-- Einträge Container -->
+                      <div id="eintraegeContainer">
+                        ${this._renderAlleEintraege(alleEintraegeSortiert)}
+                      </div>
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>
@@ -267,7 +354,6 @@ class DetailDialog extends DialogBase {
       </div>
     `;
 
-    // Entferne alte Modals
     const oldModals = document.querySelectorAll('.modal');
     oldModals.forEach(m => {
       const existingModal = bootstrap.Modal.getInstance(m);
@@ -280,13 +366,30 @@ class DetailDialog extends DialogBase {
     const modalElement = document.querySelector('#detailModal');
     const modal = new bootstrap.Modal(modalElement);
 
-    // Event-Listener für Löschen- und Bearbeiten-Buttons
+    // Event-Listener
     this._initActionListeners(modalElement, mitarbeiterId, modal, jahr);
-
-    // Event-Listener für Filter und Sortierung
     this._initFilterUndSortierung(modalElement, alleEintraegeSortiert);
+    this._initClickHandlers(modalElement, mitarbeiterId, modal, jahr);
 
-    // Event-Listener für Urlaub eintragen
+    // Lade und zeige Arbeitszeitmodell
+    await this._ladeUndZeigeArbeitszeitmodell(mitarbeiterId);
+
+    modal.show();
+
+    return new Promise((resolve) => {
+      modalElement.addEventListener('hidden.bs.modal', () => {
+        modal.dispose();
+        modalElement.remove();
+        resolve();
+      }, { once: true });
+    });
+  }
+
+  /**
+   * Initialisiert Click-Handler für KPI-Karten und Buttons
+   */
+  _initClickHandlers(modalElement, mitarbeiterId, modal, jahr) {
+    // Urlaub eintragen
     const clickUrlaub = modalElement.querySelector('#clickUrlaub');
     if (clickUrlaub) {
       clickUrlaub.addEventListener('click', async () => {
@@ -299,7 +402,7 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Übertrag-Anpassung
+    // Übertrag anpassen
     const clickUebertrag = modalElement.querySelector('#clickUebertrag');
     if (clickUebertrag) {
       clickUebertrag.addEventListener('click', async () => {
@@ -312,7 +415,7 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Krankheit eintragen
+    // Krankheit eintragen
     const clickKrankheit = modalElement.querySelector('#clickKrankheit');
     if (clickKrankheit) {
       clickKrankheit.addEventListener('click', async () => {
@@ -325,7 +428,7 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Schulung eintragen
+    // Schulung eintragen
     const clickSchulung = modalElement.querySelector('#clickSchulung');
     if (clickSchulung) {
       clickSchulung.addEventListener('click', async () => {
@@ -338,7 +441,7 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Überstunden eintragen
+    // Überstunden eintragen
     const clickUeberstunden = modalElement.querySelector('#clickUeberstunden');
     if (clickUeberstunden) {
       clickUeberstunden.addEventListener('click', async () => {
@@ -351,7 +454,7 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Bearbeiten-Button
+    // Mitarbeiter bearbeiten
     const btnBearbeiten = modalElement.querySelector('#btnMitarbeiterBearbeiten');
     if (btnBearbeiten) {
       btnBearbeiten.addEventListener('click', async () => {
@@ -364,247 +467,85 @@ class DetailDialog extends DialogBase {
       });
     }
 
-    // Event-Listener für Excel-Export
+    // Arbeitszeitmodell
+    const btnArbeitszeitmodell = modalElement.querySelector('#btnArbeitszeitmodell');
+    if (btnArbeitszeitmodell) {
+      btnArbeitszeitmodell.addEventListener('click', async () => {
+        modal.hide();
+        if (typeof dialogManager !== 'undefined') {
+          await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
+            setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+          });
+        }
+      });
+    }
+
+    // Export-Buttons
     const btnExportExcel = modalElement.querySelector('#btnExportExcel');
     if (btnExportExcel) {
       btnExportExcel.addEventListener('click', async (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        await this._exportExcel(stat, alleEintraegeSortiert, jahr);
+        showNotification('Info', 'Excel-Export in Entwicklung', 'info');
       });
     }
 
-    // Event-Listener für PDF-Export
     const btnExportPDF = modalElement.querySelector('#btnExportPDF');
     if (btnExportPDF) {
       btnExportPDF.addEventListener('click', async (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        await this._exportPDF(stat, alleEintraegeSortiert, jahr);
+        showNotification('Info', 'PDF-Export in Entwicklung', 'info');
       });
     }
-
-    modal.show();
-
-    // Promise erstellen das erst resolved wird wenn Modal geschlossen wurde
-    return new Promise((resolve) => {
-      modalElement.addEventListener('hidden.bs.modal', () => {
-        modal.dispose();
-        modalElement.remove();
-        resolve();
-      }, { once: true });
-    });
   }
 
   /**
-   * Initialisiert Filter und Sortierung Event-Listener
+   * Initialisiert Filter und Sortierung
    */
   _initFilterUndSortierung(modalElement, alleEintraege) {
     const filterButtons = modalElement.querySelectorAll('.filter-btn');
     const sortierungButtons = modalElement.querySelectorAll('.sortierung-btn');
     const container = modalElement.querySelector('#eintraegeContainer');
 
-    // Filter Event-Listener
     filterButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        // Entferne active von allen Buttons
         filterButtons.forEach(b => b.classList.remove('active'));
-        // Setze active auf geklickten Button
         btn.classList.add('active');
-        
-        // Setze Filter
         this.filterTyp = btn.dataset.filter;
-        
-        // Aktualisiere Anzeige
         this._aktualisiereEintraegeListe(container, alleEintraege);
       });
     });
 
-    // Sortierung Event-Listener
     sortierungButtons.forEach(btn => {
       btn.addEventListener('click', () => {
-        // Entferne active von allen Buttons
         sortierungButtons.forEach(b => b.classList.remove('active'));
-        // Setze active auf geklickten Button
         btn.classList.add('active');
-        
-        // Setze Sortierung
         this.sortierung = btn.dataset.sort;
-        
-        // Aktualisiere Anzeige
         this._aktualisiereEintraegeListe(container, alleEintraege);
       });
     });
-
-    // Initiale aktive Sortierung setzen (desc ist default)
-    const descBtn = modalElement.querySelector('.sortierung-btn[data-sort="desc"]');
-    if (descBtn) descBtn.classList.add('active');
   }
 
   /**
-   * Aktualisiert die Einträge-Liste basierend auf Filter und Sortierung
+   * Aktualisiert die Einträge-Liste
    */
   _aktualisiereEintraegeListe(container, alleEintraege) {
-    // Filtern
     let gefiltert = alleEintraege;
     if (this.filterTyp !== 'alle') {
       gefiltert = alleEintraege.filter(e => e.typ === this.filterTyp);
     }
 
-    // Sortieren
     const sortiert = [...gefiltert].sort((a, b) => {
       const dateA = new Date(a.datumSort);
       const dateB = new Date(b.datumSort);
-      
-      if (this.sortierung === 'desc') {
-        return dateB - dateA; // Neueste zuerst
-      } else {
-        return dateA - dateB; // Älteste zuerst
-      }
+      return this.sortierung === 'desc' ? dateB - dateA : dateA - dateB;
     });
 
-    // Rendern
     container.innerHTML = this._renderAlleEintraege(sortiert);
-
-    // Event-Listener für neue Buttons neu initialisieren
-    // (werden durch innerHTML ersetzt)
-    const modalElement = container.closest('.modal');
-    const mitarbeiterId = modalElement.dataset.mitarbeiterId; // Müsste gesetzt werden
-    const modal = bootstrap.Modal.getInstance(modalElement);
-    const jahr = this.dataManager.aktuellesJahr;
-    
-    // Neu: Event-Listener für Bearbeiten/Löschen initialisieren
-    this._initActionListenersForContainer(container, mitarbeiterId, modal, jahr);
+    this._initActionListenersForContainer(container, null, null, null);
   }
 
   /**
-   * Zählt Einträge nach Typ
-   */
-  _zaehleEintraegeNachTyp(eintraege) {
-    return {
-      urlaub: eintraege.filter(e => e.typ === 'urlaub').length,
-      krankheit: eintraege.filter(e => e.typ === 'krankheit').length,
-      schulung: eintraege.filter(e => e.typ === 'schulung').length,
-      ueberstunden: eintraege.filter(e => e.typ === 'ueberstunden').length
-    };
-  }
-
-  /**
-   * Lädt alle Einträge für einen Mitarbeiter und Jahr
-   */
-  async _ladeAlleEintraege(mitarbeiterId, jahr) {
-    const jahrStr = jahr.toString();
-
-    // Urlaub
-    const urlaubResult = await this.dataManager.db.query(`
-      SELECT * FROM urlaub 
-      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
-      ORDER BY von_datum DESC
-    `, [mitarbeiterId, jahrStr]);
-
-    // Krankheit
-    const krankheitResult = await this.dataManager.db.query(`
-      SELECT * FROM krankheit 
-      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
-      ORDER BY von_datum DESC
-    `, [mitarbeiterId, jahrStr]);
-
-    // Schulung
-    const schulungResult = await this.dataManager.db.query(`
-      SELECT * FROM schulung 
-      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
-      ORDER BY datum DESC
-    `, [mitarbeiterId, jahrStr]);
-
-    // Überstunden
-    const ueberstundenResult = await this.dataManager.db.query(`
-      SELECT * FROM ueberstunden 
-      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
-      ORDER BY datum DESC
-    `, [mitarbeiterId, jahrStr]);
-
-    return {
-      urlaub: urlaubResult.success ? urlaubResult.data : [],
-      krankheit: krankheitResult.success ? krankheitResult.data : [],
-      schulung: schulungResult.success ? schulungResult.data : [],
-      ueberstunden: ueberstundenResult.success ? ueberstundenResult.data : []
-    };
-  }
-
-  /**
-   * Berechnet die tatsächlich gemachten Überstunden (nur positive Werte)
-   */
-  async _berechneUeberstundenGemacht(mitarbeiterId, jahr) {
-    const jahrStr = jahr.toString();
-    
-    const result = await this.dataManager.db.query(`
-      SELECT stunden FROM ueberstunden 
-      WHERE mitarbeiter_id = ? 
-        AND strftime('%Y', datum) = ?
-        AND stunden > 0
-    `, [mitarbeiterId, jahrStr]);
-    
-    if (!result.success || !result.data) return 0;
-    
-    return result.data.reduce((sum, row) => sum + row.stunden, 0);
-  }
-
-  /**
-   * Kombiniert alle Einträge und sortiert sie chronologisch (neueste zuerst)
-   */
-  _kombiniereUndSortiereEintraege(eintraege) {
-    const alle = [];
-
-    // Urlaub
-    eintraege.urlaub.forEach(e => {
-      alle.push({
-        typ: 'urlaub',
-        datum: e.von_datum,
-        datumSort: e.von_datum,
-        ...e
-      });
-    });
-
-    // Krankheit
-    eintraege.krankheit.forEach(e => {
-      alle.push({
-        typ: 'krankheit',
-        datum: e.von_datum,
-        datumSort: e.von_datum,
-        ...e
-      });
-    });
-
-    // Schulung
-    eintraege.schulung.forEach(e => {
-      alle.push({
-        typ: 'schulung',
-        datum: e.datum,
-        datumSort: e.datum,
-        ...e
-      });
-    });
-
-    // Überstunden
-    eintraege.ueberstunden.forEach(e => {
-      alle.push({
-        typ: 'ueberstunden',
-        datum: e.datum,
-        datumSort: e.datum,
-        ...e
-      });
-    });
-
-    // Sortiere nach Datum (neueste zuerst)
-    alle.sort((a, b) => {
-      return new Date(b.datumSort) - new Date(a.datumSort);
-    });
-
-    return alle;
-  }
-
-  /**
-   * Rendert alle Einträge in einer Timeline
+   * Rendert alle Einträge als Liste
    */
   _renderAlleEintraege(eintraege) {
     if (eintraege.length === 0) {
@@ -692,8 +633,55 @@ class DetailDialog extends DialogBase {
   }
 
   /**
-   * Gibt Konfiguration für einen Eintragstyp zurück
+   * Initialisiert Event-Listener für Aktionen
    */
+  _initActionListeners(modalElement, mitarbeiterId, modal, jahr) {
+    modalElement.addEventListener('click', async (e) => {
+      const deleteBtn = e.target.closest('.btn-delete');
+      const editBtn = e.target.closest('.btn-edit');
+      
+      if (deleteBtn) {
+        await this._handleDelete(deleteBtn, mitarbeiterId, modal, jahr);
+      } else if (editBtn) {
+        await this._handleEdit(editBtn, mitarbeiterId, modal, jahr);
+      }
+    });
+  }
+
+  _initActionListenersForContainer(container, mitarbeiterId, modal, jahr) {
+    // Implementierung für Container-spezifische Listener
+  }
+
+  async _handleDelete(deleteBtn, mitarbeiterId, modal, jahr) {
+    const id = parseInt(deleteBtn.dataset.id);
+    const typ = deleteBtn.dataset.typ;
+
+    if (!confirm(`Möchten Sie diesen ${this._getTypLabel(typ)}-Eintrag wirklich löschen?`)) {
+      return;
+    }
+
+    try {
+      const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
+      const result = await this.dataManager.db.run(`DELETE FROM ${tabelle} WHERE id = ?`, [id]);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
+      this.dataManager.invalidateCache();
+      modal.hide();
+      setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+    } catch (error) {
+      console.error('Fehler beim Löschen:', error);
+      showNotification('Fehler', error.message, 'danger');
+    }
+  }
+
+  async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
+    showNotification('Info', 'Bearbeiten-Funktion in Entwicklung', 'info');
+  }
+
   _getEintragConfig(typ) {
     const configs = {
       urlaub: {
@@ -724,125 +712,208 @@ class DetailDialog extends DialogBase {
     return configs[typ] || configs.urlaub;
   }
 
-  /**
-   * Initialisiert Event-Listener für Löschen- und Bearbeiten-Buttons
-   */
-  _initActionListeners(modalElement, mitarbeiterId, modal, jahr) {
-    modalElement.addEventListener('click', async (e) => {
-      const deleteBtn = e.target.closest('.btn-delete');
-      const editBtn = e.target.closest('.btn-edit');
-      
-      if (deleteBtn) {
-        await this._handleDelete(deleteBtn, mitarbeiterId, modal, jahr);
-      } else if (editBtn) {
-        await this._handleEdit(editBtn, mitarbeiterId, modal, jahr);
-      }
+  _getTypLabel(typ) {
+    const labels = {
+      urlaub: 'Urlaub',
+      krankheit: 'Krankheit',
+      schulung: 'Schulung',
+      ueberstunden: 'Überstunden'
+    };
+    return labels[typ] || typ;
+  }
+
+  _zaehleEintraegeNachTyp(eintraege) {
+    return {
+      urlaub: eintraege.filter(e => e.typ === 'urlaub').length,
+      krankheit: eintraege.filter(e => e.typ === 'krankheit').length,
+      schulung: eintraege.filter(e => e.typ === 'schulung').length,
+      ueberstunden: eintraege.filter(e => e.typ === 'ueberstunden').length
+    };
+  }
+
+  async _ladeAlleEintraege(mitarbeiterId, jahr) {
+    const jahrStr = jahr.toString();
+
+    const urlaubResult = await this.dataManager.db.query(`
+      SELECT * FROM urlaub 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+      ORDER BY von_datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    const krankheitResult = await this.dataManager.db.query(`
+      SELECT * FROM krankheit 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+      ORDER BY von_datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    const schulungResult = await this.dataManager.db.query(`
+      SELECT * FROM schulung 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+      ORDER BY datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    const ueberstundenResult = await this.dataManager.db.query(`
+      SELECT * FROM ueberstunden 
+      WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+      ORDER BY datum DESC
+    `, [mitarbeiterId, jahrStr]);
+
+    return {
+      urlaub: urlaubResult.success ? urlaubResult.data : [],
+      krankheit: krankheitResult.success ? krankheitResult.data : [],
+      schulung: schulungResult.success ? schulungResult.data : [],
+      ueberstunden: ueberstundenResult.success ? ueberstundenResult.data : []
+    };
+  }
+
+  async _berechneUeberstundenGemacht(mitarbeiterId, jahr) {
+    const jahrStr = jahr.toString();
+    
+    const result = await this.dataManager.db.query(`
+      SELECT stunden FROM ueberstunden 
+      WHERE mitarbeiter_id = ? 
+        AND strftime('%Y', datum) = ?
+        AND stunden > 0
+    `, [mitarbeiterId, jahrStr]);
+    
+    if (!result.success || !result.data) return 0;
+    return result.data.reduce((sum, row) => sum + row.stunden, 0);
+  }
+
+  _kombiniereUndSortiereEintraege(eintraege) {
+    const alle = [];
+
+    eintraege.urlaub.forEach(e => {
+      alle.push({
+        typ: 'urlaub',
+        datum: e.von_datum,
+        datumSort: e.von_datum,
+        ...e
+      });
     });
+
+    eintraege.krankheit.forEach(e => {
+      alle.push({
+        typ: 'krankheit',
+        datum: e.von_datum,
+        datumSort: e.von_datum,
+        ...e
+      });
+    });
+
+    eintraege.schulung.forEach(e => {
+      alle.push({
+        typ: 'schulung',
+        datum: e.datum,
+        datumSort: e.datum,
+        ...e
+      });
+    });
+
+    eintraege.ueberstunden.forEach(e => {
+      alle.push({
+        typ: 'ueberstunden',
+        datum: e.datum,
+        datumSort: e.datum,
+        ...e
+      });
+    });
+
+    alle.sort((a, b) => new Date(b.datumSort) - new Date(a.datumSort));
+    return alle;
   }
 
   /**
-   * Initialisiert Event-Listener nur für einen Container (nach innerHTML Änderung)
+   * Lädt und zeigt das Arbeitszeitmodell an
    */
-  _initActionListenersForContainer(container, mitarbeiterId, modal, jahr) {
-    container.addEventListener('click', async (e) => {
-      const deleteBtn = e.target.closest('.btn-delete');
-      const editBtn = e.target.closest('.btn-edit');
-      
-      if (deleteBtn) {
-        await this._handleDelete(deleteBtn, mitarbeiterId, modal, jahr);
-      } else if (editBtn) {
-        await this._handleEdit(editBtn, mitarbeiterId, modal, jahr);
-      }
-    });
-  }
-
-  /**
-   * Behandelt Löschen-Aktion
-   */
-  async _handleDelete(deleteBtn, mitarbeiterId, modal, jahr) {
-    const id = parseInt(deleteBtn.dataset.id);
-    const typ = deleteBtn.dataset.typ;
-
-    if (!confirm(`Möchten Sie diesen ${this._getTypLabel(typ)}-Eintrag wirklich löschen?`)) {
-      return;
-    }
+  async _ladeUndZeigeArbeitszeitmodell(mitarbeiterId) {
+    const container = document.getElementById('arbeitszeitmodellAnzeige');
+    if (!container) return;
 
     try {
-      const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
+      // Lade Arbeitszeitmodell aus Datenbank
+      const modell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
       
-      const result = await this.dataManager.db.run(
-        `DELETE FROM ${tabelle} WHERE id = ?`,
-        [id]
-      );
+      const wochentage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      const labels = {
+        'VOLL': 'ganz',
+        'HALB': 'halb',
+        'FREI': 'frei'
+      };
 
-      if (!result.success) {
-        throw new Error(result.error);
+      let html = '<small class="text-muted d-block mb-1">Wochenplan:</small>';
+      html += '<div class="text-light small" style="line-height: 1.6;">';
+
+      if (modell.length === 0) {
+        // Standard-Modell: Mo-Fr ganz, Sa-So frei
+        html += 'Mo-Fr: <span class="text-success">ganz</span><br>';
+        html += 'Sa-So: <span class="text-muted">frei</span>';
+      } else {
+        // Gruppiere aufeinanderfolgende Tage mit gleicher Arbeitszeit
+        const gruppen = [];
+        let aktuelleGruppe = null;
+
+        for (let i = 0; i < 7; i++) {
+          const tagModell = modell.find(m => m.wochentag === i);
+          const arbeitszeit = tagModell ? tagModell.arbeitszeit : (i < 5 ? 'VOLL' : 'FREI');
+
+          if (!aktuelleGruppe || aktuelleGruppe.arbeitszeit !== arbeitszeit) {
+            // Neue Gruppe starten
+            if (aktuelleGruppe) {
+              gruppen.push(aktuelleGruppe);
+            }
+            aktuelleGruppe = {
+              start: i,
+              end: i,
+              arbeitszeit: arbeitszeit
+            };
+          } else {
+            // Gruppe erweitern
+            aktuelleGruppe.end = i;
+          }
+        }
+        
+        // Letzte Gruppe hinzufügen
+        if (aktuelleGruppe) {
+          gruppen.push(aktuelleGruppe);
+        }
+
+        // Gruppen rendern
+        gruppen.forEach((gruppe, index) => {
+          const label = labels[gruppe.arbeitszeit] || gruppe.arbeitszeit.toLowerCase();
+          const colorClass = gruppe.arbeitszeit === 'VOLL' ? 'text-success' : 
+                            gruppe.arbeitszeit === 'HALB' ? 'text-warning' : 
+                            'text-muted';
+          
+          if (gruppe.start === gruppe.end) {
+            // Einzelner Tag
+            html += `${wochentage[gruppe.start]}: <span class="${colorClass}">${label}</span>`;
+          } else {
+            // Mehrere Tage
+            html += `${wochentage[gruppe.start]}-${wochentage[gruppe.end]}: <span class="${colorClass}">${label}</span>`;
+          }
+          
+          if (index < gruppen.length - 1) {
+            html += '<br>';
+          }
+        });
       }
 
-      showNotification('Erfolg', 'Eintrag wurde gelöscht', 'success');
-      
-      this.dataManager.invalidateCache();
-      
-      modal.hide();
-      setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+      html += '</div>';
+      container.innerHTML = html;
+
     } catch (error) {
-      console.error('Fehler beim Löschen:', error);
-      showNotification('Fehler', error.message, 'danger');
+      console.error('Fehler beim Laden des Arbeitszeitmodells:', error);
+      container.innerHTML = `
+        <small class="text-muted d-block mb-1">Wochenplan:</small>
+        <div class="text-muted small">
+          Standard: Mo-Fr ganz
+        </div>
+      `;
     }
   }
-
-  /**
-   * Behandelt Bearbeiten-Aktion
-   */
-  async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
-    const id = parseInt(editBtn.dataset.id);
-    const typ = editBtn.dataset.typ;
-
-    modal.hide();
-
-    // Lade den Eintrag
-    const eintrag = await this._ladeEintrag(id, typ);
-    if (!eintrag) {
-      showNotification('Fehler', 'Eintrag nicht gefunden', 'danger');
-      return;
-    }
-
-    // Zeige entsprechenden Bearbeiten-Dialog
-    switch (typ) {
-      case 'urlaub':
-        await this._zeigeUrlaubBearbeiten(eintrag, mitarbeiterId, jahr);
-        break;
-      case 'krankheit':
-        await this._zeigeKrankheitBearbeiten(eintrag, mitarbeiterId, jahr);
-        break;
-      case 'schulung':
-        await this._zeigeSchulungBearbeiten(eintrag, mitarbeiterId, jahr);
-        break;
-      case 'ueberstunden':
-        await this._zeigeUeberstundenBearbeiten(eintrag, mitarbeiterId, jahr);
-        break;
-    }
-  }
-
-  /**
-   * Lädt einen einzelnen Eintrag
-   */
-  async _ladeEintrag(id, typ) {
-    const tabelle = typ === 'ueberstunden' ? 'ueberstunden' : typ;
-    const result = await this.dataManager.db.get(
-      `SELECT * FROM ${tabelle} WHERE id = ?`,
-      [id]
-    );
-    return result.success ? result.data : null;
-  }
-
-  // [Alle anderen Methoden bleiben unverändert - _zeigeUrlaubBearbeiten, _zeigeKrankheitBearbeiten, etc.]
-  // [_exportExcel, _exportPDF, _gruppiereEintraegeNachTyp bleiben ebenfalls unverändert]
-  
-  // ... (Rest des Codes bleibt identisch)
 }
 
-// Export für Node.js
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = DetailDialog;
 }
