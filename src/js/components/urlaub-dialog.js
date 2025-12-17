@@ -5,6 +5,10 @@
  * NEU: Berücksichtigt Arbeitszeitmodell (freie Tage = kein Urlaub, Halbtage = 0.5 Urlaub)
  * - Bei 4-Tage-Woche: ganze Woche = nur 4 Urlaubstage
  * - Bei Halbtagen: wird entsprechend anteilig berechnet
+ * 
+ * FIX: Korrigierte Urlaubstage-Berechnung
+ * - VOLL oder HALB = 1 Urlaubstag (nicht 0.5!)
+ * - Nur FREI-Tage zählen nicht
  */
 
 class UrlaubDialog extends DialogBase {
@@ -76,7 +80,6 @@ class UrlaubDialog extends DialogBase {
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
-                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="0.5">Halber Tag</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="1">1 Tag</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="2">2 Tage</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="3">3 Tage</button>
@@ -120,8 +123,10 @@ class UrlaubDialog extends DialogBase {
       }
 
       const vonDatum = document.getElementById('vonDatum').value;
-      const dauerAnzeige = document.getElementById('dauerAnzeige').textContent;
-      const tage = parseFloat(dauerAnzeige);
+      const bisDatum = document.getElementById('bisDatum').value;
+      
+      // Berechne Urlaubstage MIT Arbeitszeitmodell
+      const tage = await this._berechneUrlaubstage(vonDatum, bisDatum, mitarbeiterId);
 
       if (isNaN(tage) || tage <= 0) {
         showNotification('Fehler', 'Ungültige Anzahl Urlaubstage', 'danger');
@@ -158,8 +163,178 @@ class UrlaubDialog extends DialogBase {
   }
 
   /**
+   * Berechnet Urlaubstage mit Arbeitszeitmodell
+   * WICHTIG: Jeder Arbeitstag (VOLL oder HALB) = 1 Urlaubstag
+   */
+  async _berechneUrlaubstage(vonDatum, bisDatum, mitarbeiterId) {
+    const von = new Date(vonDatum + 'T00:00:00');
+    const bis = new Date(bisDatum + 'T00:00:00');
+    
+    // Lade Arbeitszeitmodell
+    const arbeitszeitmodell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
+    
+    // Lade Feiertage
+    const jahreSet = new Set();
+    const current = new Date(von);
+    while (current <= bis) {
+      jahreSet.add(current.getFullYear());
+      current.setDate(current.getDate() + 1);
+    }
+    
+    const alleFeiertage = new Set();
+    for (const jahr of jahreSet) {
+      const feiertage = await this._ladeFeiertage(jahr);
+      feiertage.forEach(f => alleFeiertage.add(f));
+    }
+    
+    // Berechne Urlaubstage
+    let urlaubstage = 0;
+    const checkDate = new Date(von);
+    
+    while (checkDate <= bis) {
+      const datumStr = this._formatDatumISO(checkDate);
+      
+      // Prüfe ob Feiertag (der auf einen Arbeitstag fällt)
+      if (alleFeiertage.has(datumStr)) {
+        const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+        // Feiertag zählt nur wenn es ein Arbeitstag wäre
+        if (urlaubswert > 0) {
+          // Feiertag wird NICHT als Urlaub gezählt
+          checkDate.setDate(checkDate.getDate() + 1);
+          continue;
+        }
+      }
+      
+      // Berechne Urlaubswert für diesen Tag
+      const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+      urlaubstage += urlaubswert;
+      
+      checkDate.setDate(checkDate.getDate() + 1);
+    }
+    
+    return urlaubstage;
+  }
+
+  /**
+   * Berechnet wie viele Urlaubstage ein Tag wert ist
+   * WICHTIG: VOLL oder HALB = 1 Tag (nicht 0.5!)
+   */
+  _berechneUrlaubstageWert(datum, arbeitszeitmodell) {
+    const date = new Date(datum + 'T00:00:00');
+    const wochentag = date.getDay(); // 0 = Sonntag, 1 = Montag, ..., 6 = Samstag
+    
+    // Konvertiere zu unserem System (0 = Montag, 6 = Sonntag)
+    const wochentagIndex = wochentag === 0 ? 6 : wochentag - 1;
+    
+    // Wenn kein Arbeitszeitmodell, Standard: Mo-Fr = VOLL, Sa-So = FREI
+    if (!arbeitszeitmodell || arbeitszeitmodell.length === 0) {
+      return wochentagIndex < 5 ? 1.0 : 0; // Mo-Fr = 1.0, Sa-So = 0
+    }
+    
+    // Finde Modell für diesen Wochentag
+    const tagModell = arbeitszeitmodell.find(m => m.wochentag === wochentagIndex);
+    
+    // Wenn kein Modell für diesen Tag definiert, Standard: Mo-Fr = VOLL
+    if (!tagModell) {
+      return wochentagIndex < 5 ? 1.0 : 0;
+    }
+    
+    // WICHTIG: VOLL oder HALB = 1 Urlaubstag!
+    // Nach Arbeitszeit-Typ
+    switch (tagModell.arbeitszeit) {
+      case 'VOLL':
+        return 1.0;
+      case 'HALB':
+        return 1.0;  // FIX: Halbtag zählt auch als 1 Urlaubstag!
+      case 'FREI':
+        return 0;
+      default:
+        return 1.0;
+    }
+  }
+
+  /**
+   * Lädt Feiertage für ein Jahr
+   */
+  async _ladeFeiertage(jahr) {
+    try {
+      const result = await this.dataManager.db.query(`
+        SELECT datum FROM feiertage 
+        WHERE strftime('%Y', datum) = ?
+      `, [jahr.toString()]);
+      
+      if (!result.success) {
+        return new Set();
+      }
+      
+      return new Set(result.data.map(f => f.datum));
+    } catch (error) {
+      console.error('Fehler beim Laden der Feiertage:', error);
+      return new Set();
+    }
+  }
+
+  /**
+   * Formatiert Datum als ISO-String (YYYY-MM-DD)
+   */
+  _formatDatumISO(date) {
+    const jahr = date.getFullYear();
+    const monat = String(date.getMonth() + 1).padStart(2, '0');
+    const tag = String(date.getDate()).padStart(2, '0');
+    return `${jahr}-${monat}-${tag}`;
+  }
+
+  /**
+   * Berechnet End-Datum nach Urlaubstagen
+   */
+  async _berechneEndDatumNachUrlaubstagen(vonDatum, urlaubstage, mitarbeiterId) {
+    const von = new Date(vonDatum + 'T00:00:00');
+    let verbleibendeUrlaubstage = urlaubstage;
+    const current = new Date(von);
+    
+    // Lade Arbeitszeitmodell
+    const arbeitszeitmodell = await this.dataManager.getArbeitszeitmodell(mitarbeiterId);
+    
+    // Schätze maximales Jahr
+    const maxJahr = von.getFullYear() + 1;
+    
+    // Lade Feiertage
+    const alleFeiertage = new Set();
+    for (let jahr = von.getFullYear(); jahr <= maxJahr; jahr++) {
+      const feiertage = await this._ladeFeiertage(jahr);
+      feiertage.forEach(f => alleFeiertage.add(f));
+    }
+    
+    while (verbleibendeUrlaubstage > 0) {
+      const datumStr = this._formatDatumISO(current);
+      
+      // Prüfe ob Feiertag
+      if (alleFeiertage.has(datumStr)) {
+        const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+        if (urlaubswert > 0) {
+          // Feiertag auf Arbeitstag - überspringen (kostet keinen Urlaub)
+          current.setDate(current.getDate() + 1);
+          continue;
+        }
+      }
+      
+      // Berechne Urlaubswert für diesen Tag
+      const urlaubswert = this._berechneUrlaubstageWert(datumStr, arbeitszeitmodell);
+      
+      if (urlaubswert > 0) {
+        verbleibendeUrlaubstage -= urlaubswert;
+      }
+      
+      if (verbleibendeUrlaubstage > 0) {
+        current.setDate(current.getDate() + 1);
+      }
+    }
+    
+    return this._formatDatumISO(current);
+  }
+
+  /**
    * Initialisiert Event-Listener für Urlaub-Dialog
-   * NEU: Verwendet berechneUrlaubstageAsync mit Arbeitszeitmodell
    */
   async _initUrlaubEventListener(mitarbeiterId, restUrlaub) {
     const vonDatumInput = document.getElementById('vonDatum');
@@ -222,17 +397,20 @@ class UrlaubDialog extends DialogBase {
       }
       
       try {
-        // NEU: Berechne Urlaubstage MIT Arbeitszeitmodell
-        const urlaubstage = await berechneUrlaubstageAsync(von, bis, mitarbeiterId);
-        dauerAnzeige.textContent = urlaubstage.toFixed(1);
+        // Berechne Urlaubstage MIT Arbeitszeitmodell
+        const urlaubstage = await this._berechneUrlaubstage(von, bis, mitarbeiterId);
+        dauerAnzeige.textContent = urlaubstage;
         
         // Zeige Info wenn Arbeitszeitmodell Auswirkungen hat
-        const kalenderTage = Math.ceil((new Date(bis) - new Date(von)) / (1000 * 60 * 60 * 24)) + 1;
+        const vonDate = new Date(von + 'T00:00:00');
+        const bisDate = new Date(bis + 'T00:00:00');
+        const kalenderTage = Math.ceil((bisDate - vonDate) / (1000 * 60 * 60 * 24)) + 1;
+        
         if (urlaubstage < kalenderTage) {
           if (arbeitszeitInfo && arbeitszeitInfoText) {
             arbeitszeitInfo.classList.remove('d-none');
             const freieTage = kalenderTage - urlaubstage;
-            arbeitszeitInfoText.textContent = `Ihr Arbeitszeitmodell wurde berücksichtigt: ${freieTage.toFixed(1)} freie Tag(e) werden nicht als Urlaub gezählt.`;
+            arbeitszeitInfoText.textContent = `Ihr Arbeitszeitmodell wurde berücksichtigt: ${freieTage} freie Tag(e) werden nicht als Urlaub gezählt.`;
           }
         } else {
           if (arbeitszeitInfo) arbeitszeitInfo.classList.add('d-none');
@@ -282,7 +460,7 @@ class UrlaubDialog extends DialogBase {
     // Initial prüfen
     await aktualisiereHinweise();
 
-    // Dauer-Buttons - NEU: mit Arbeitszeitmodell
+    // Dauer-Buttons - mit Arbeitszeitmodell
     document.querySelectorAll('.dauer-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const tage = parseFloat(btn.dataset.tage);
@@ -291,68 +469,12 @@ class UrlaubDialog extends DialogBase {
         if (!von) return;
 
         try {
-          if (tage === 0.5) {
-            bisDatumInput.value = von;
-            // Für halben Tag: prüfe ob das ein Arbeitstag ist
-            const urlaubstage = await berechneUrlaubstageAsync(von, von, mitarbeiterId);
-            dauerAnzeige.textContent = urlaubstage.toFixed(1);
-            if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
-            pruefeUrlaubGrenze(urlaubstage);
-            
-            if (urlaubstage === 0) {
-              if (arbeitszeitInfo && arbeitszeitInfoText) {
-                arbeitszeitInfo.classList.remove('d-none');
-                arbeitszeitInfoText.textContent = 'Dieser Tag ist laut Ihrem Arbeitszeitmodell kein Arbeitstag.';
-              }
-            } else if (arbeitszeitInfo) {
-              arbeitszeitInfo.classList.add('d-none');
-            }
-          } else {
-            // Berechne Enddatum MIT Arbeitszeitmodell
-            const bis = await berechneEndDatumNachUrlaubstagenAsync(von, tage, mitarbeiterId);
-            bisDatumInput.value = bis;
-            
-            // Aktualisiere Anzeige
-            const urlaubstage = await berechneUrlaubstageAsync(von, bis, mitarbeiterId);
-            dauerAnzeige.textContent = urlaubstage.toFixed(1);
-            
-            // Prüfe Urlaubsgrenze
-            pruefeUrlaubGrenze(urlaubstage);
-            
-            // Hole Feiertage im Zeitraum
-            if (feiertagsHinweiseDiv) {
-              const feiertage = await getFeiertageImZeitraum(von, bis);
-              feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
-            }
-            
-            // Zeige Info wenn nötig
-            const kalenderTage = Math.ceil((new Date(bis) - new Date(von)) / (1000 * 60 * 60 * 24)) + 1;
-            if (urlaubstage < kalenderTage) {
-              if (arbeitszeitInfo && arbeitszeitInfoText) {
-                arbeitszeitInfo.classList.remove('d-none');
-                const freieTage = kalenderTage - urlaubstage;
-                arbeitszeitInfoText.textContent = `Ihr Arbeitszeitmodell wurde berücksichtigt: ${freieTage.toFixed(1)} freie Tag(e) werden nicht als Urlaub gezählt.`;
-              }
-            } else {
-              if (arbeitszeitInfo) arbeitszeitInfo.classList.add('d-none');
-            }
-          }
-
+          // Berechne Enddatum MIT Arbeitszeitmodell
+          const bis = await this._berechneEndDatumNachUrlaubstagen(von, tage, mitarbeiterId);
+          bisDatumInput.value = bis;
+          
           // Aktualisiere Hinweise
-          if (veranstaltungsHinweiseDiv) {
-            const veranstaltungen = await this.pruefeVeranstaltungen(vonDatumInput.value, bisDatumInput.value);
-            veranstaltungsHinweiseDiv.innerHTML = this.erstelleVeranstaltungsHinweisHTML(veranstaltungen);
-          }
-
-          if (kollegenHinweiseDiv) {
-            const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
-              mitarbeiterId, 
-              vonDatumInput.value, 
-              bisDatumInput.value, 
-              'urlaub'
-            );
-            kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
-          }
+          await aktualisiereHinweise();
         } catch (error) {
           console.error('Fehler bei Dauer-Button:', error);
         }
