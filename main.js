@@ -5,6 +5,7 @@
  * PORTABLE VERSION: Datenbank liegt neben der .exe
  * 
  * NEU: Integrierter Logger (ohne externe Abhängigkeit)
+ * NEU: Arbeitszeitmodelle für Mitarbeiter
  */
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
@@ -216,7 +217,7 @@ function createTables() {
       )
     `);
 
-    // Mitarbeiter
+    // Mitarbeiter - NEU: Arbeitszeitmodell hinzugefügt
     db.exec(`
       CREATE TABLE IF NOT EXISTS mitarbeiter (
         id TEXT PRIMARY KEY,
@@ -228,10 +229,25 @@ function createTables() {
         eintrittsdatum DATE NOT NULL,
         austrittsdatum DATE,
         urlaubstage_jahr REAL NOT NULL DEFAULT 30,
+        wochenstunden REAL NOT NULL DEFAULT 40,
         status TEXT NOT NULL DEFAULT 'AKTIV',
         erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
         aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (abteilung_id) REFERENCES abteilungen(id)
+      )
+    `);
+
+    // NEU: Arbeitszeitmodell-Tabelle
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS arbeitszeitmodell (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mitarbeiter_id TEXT NOT NULL,
+        wochentag INTEGER NOT NULL,
+        arbeitszeit TEXT NOT NULL DEFAULT 'VOLL',
+        erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        aktualisiert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE,
+        UNIQUE(mitarbeiter_id, wochentag)
       )
     `);
 
@@ -328,6 +344,20 @@ function createTables() {
         FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
       )
     `);
+
+    // Migration: Füge wochenstunden Spalte hinzu falls nicht vorhanden
+    try {
+      const columns = db.prepare("PRAGMA table_info(mitarbeiter)").all();
+      const hasWochenstunden = columns.some(col => col.name === 'wochenstunden');
+      
+      if (!hasWochenstunden) {
+        logger.info('🔄 Migration: Füge wochenstunden Spalte hinzu');
+        db.exec('ALTER TABLE mitarbeiter ADD COLUMN wochenstunden REAL NOT NULL DEFAULT 40');
+        logger.success('✅ Migration erfolgreich: wochenstunden hinzugefügt');
+      }
+    } catch (error) {
+      logger.warn('⚠️ Migration wochenstunden übersprungen', { error: error.message });
+    }
 
     // Standard-Abteilungen erstellen
     createDefaultDepartments();

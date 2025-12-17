@@ -4,6 +4,7 @@
  * 
  * FIX: ID-Sanitierung für Umlaute und Sonderzeichen
  * NEU: Gesamtanzahl Mitarbeiter wird angezeigt
+ * NEU: Arbeitszeitmodell Button hinzugefügt
  */
 
 class StammdatenDialog extends DialogBase {
@@ -70,9 +71,19 @@ class StammdatenDialog extends DialogBase {
                   </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label">Urlaubstage pro Jahr *</label>
-                  <input type="number" class="form-control" id="urlaubstageJahr" value="30" min="0" max="50" required>
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Urlaubstage pro Jahr *</label>
+                    <input type="number" class="form-control" id="urlaubstageJahr" value="30" min="0" max="50" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Wochenstunden *</label>
+                    <div class="input-group">
+                      <input type="number" class="form-control" id="wochenstunden" value="40" min="0" max="60" step="0.5" required>
+                      <span class="input-group-text">Std.</span>
+                    </div>
+                    <small class="text-muted">Standard Vollzeit: 40h</small>
+                  </div>
                 </div>
               </form>
             </div>
@@ -101,7 +112,8 @@ class StammdatenDialog extends DialogBase {
         abteilung: document.getElementById('abteilung').value,
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         einstellungsdatum: document.getElementById('einstellungsdatum').value,
-        urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value)
+        urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
+        wochenstunden: parseFloat(document.getElementById('wochenstunden').value)
       };
 
       // FIX: Generiere automatische ID mit Sanitierung
@@ -138,6 +150,7 @@ class StammdatenDialog extends DialogBase {
 
   /**
    * Zeigt Stammdaten Bearbeiten Dialog
+   * NEU: Arbeitszeitmodell Button hinzugefügt
    */
   async zeigeStammdatenBearbeiten(mitarbeiterId, callback) {
     const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
@@ -160,6 +173,17 @@ class StammdatenDialog extends DialogBase {
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+              <!-- NEU: Arbeitszeitmodell Button -->
+              <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+                <div>
+                  <i class="bi bi-clock-history"></i>
+                  <strong>Arbeitszeitmodell:</strong> ${mitarbeiter.wochenstunden || 40}h/Woche
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-info" id="btnArbeitszeitmodell">
+                  <i class="bi bi-calendar-week"></i> Wochenplan bearbeiten
+                </button>
+              </div>
+
               <form id="stammdatenBearbeitenForm">
                 <div class="row">
                   <div class="col-md-6 mb-3">
@@ -190,9 +214,18 @@ class StammdatenDialog extends DialogBase {
                   </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label">Urlaubstage pro Jahr *</label>
-                  <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Urlaubstage pro Jahr *</label>
+                    <input type="number" class="form-control" id="urlaubstageJahr" value="${mitarbeiter.urlaubstage_jahr}" min="0" max="50" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Wochenstunden *</label>
+                    <div class="input-group">
+                      <input type="number" class="form-control" id="wochenstunden" value="${mitarbeiter.wochenstunden || 40}" min="0" max="60" step="0.5" required>
+                      <span class="input-group-text">Std.</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="mb-3">
@@ -228,6 +261,7 @@ class StammdatenDialog extends DialogBase {
         geburtsdatum: document.getElementById('geburtsdatum').value || null,
         einstellungsdatum: document.getElementById('einstellungsdatum').value,
         urlaubstage_jahr: parseFloat(document.getElementById('urlaubstageJahr').value),
+        wochenstunden: parseFloat(document.getElementById('wochenstunden').value),
         austrittsdatum: document.getElementById('austrittsdatum').value || null
       };
 
@@ -241,11 +275,30 @@ class StammdatenDialog extends DialogBase {
         return false;
       }
     });
+
+    // NEU: Event-Listener für Arbeitszeitmodell Button
+    setTimeout(() => {
+      const btnArbeitszeitmodell = document.getElementById('btnArbeitszeitmodell');
+      if (btnArbeitszeitmodell) {
+        btnArbeitszeitmodell.addEventListener('click', async () => {
+          const modal = bootstrap.Modal.getInstance(document.getElementById('stammdatenBearbeitenModal'));
+          if (modal) modal.hide();
+          
+          if (typeof dialogManager !== 'undefined') {
+            await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
+              // Neu laden nach Änderung
+              if (callback) await callback();
+              setTimeout(() => this.zeigeStammdatenBearbeiten(mitarbeiterId, callback), 300);
+            });
+          }
+        });
+      }
+    }, 100);
   }
 
   /**
    * Zeigt Mitarbeiter-Verwaltungs-Modal
-   * NEU: Mit Gesamtanzahl der Mitarbeiter
+   * NEU: Mit Gesamtanzahl der Mitarbeiter und Wochenstunden
    */
   async zeigeStammdatenVerwalten(callback) {
     const mitarbeiter = await this.dataManager.getAlleMitarbeiter();
@@ -258,6 +311,7 @@ class StammdatenDialog extends DialogBase {
             ${ma.abteilung_name}
           </span>
         </td>
+        <td class="text-center">${ma.wochenstunden || 40}h</td>
         <td>${new Date(ma.eintrittsdatum).toLocaleDateString('de-DE')}</td>
         <td>
           <div class="btn-group btn-group-sm">
@@ -284,8 +338,9 @@ class StammdatenDialog extends DialogBase {
             </div>
             <div class="modal-body">
               <!-- NEU: Gesamtanzahl anzeigen -->
+              <div class="mb-3">
                 <strong>Gesamt:</strong> ${mitarbeiter.length} Mitarbeiter
-             
+              </div>
 
               <div class="table-responsive">
                 <table class="table table-hover table-striped">
@@ -293,6 +348,7 @@ class StammdatenDialog extends DialogBase {
                     <tr>
                       <th>Name</th>
                       <th>Abteilung</th>
+                      <th class="text-center">Wochenstunden</th>
                       <th>Eintrittsdatum</th>
                       <th>Aktionen</th>
                     </tr>

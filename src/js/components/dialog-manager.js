@@ -3,6 +3,7 @@
  * Zentrale Klasse die alle Dialog-Funktionen zusammenführt
  * 
  * UPDATE: Übertrag-Dialog hinzugefügt
+ * UPDATE: Arbeitszeitmodell-Dialog hinzugefügt
  */
 
 class DialogManager {
@@ -19,7 +20,8 @@ class DialogManager {
     this.feiertagDialog = new FeiertagDialog(dataManager);
     this.veranstaltungDialog = new VeranstaltungDialog(dataManager);
     this.detailDialog = new DetailDialog(dataManager);
-    this.uebertragDialog = new UebertragDialog(dataManager); // NEU
+    this.uebertragDialog = new UebertragDialog(dataManager);
+    this.arbeitszeitmodellDialog = new ArbeitszeitmodellDialog(dataManager); // NEU
   }
 
   // === Stammdaten-Dialoge ===
@@ -102,10 +104,16 @@ class DialogManager {
     return this.detailDialog.zeigeDetails(mitarbeiterId, jahr);
   }
 
-  // === Übertrag-Dialog (NEU) ===
+  // === Übertrag-Dialog ===
   
   async zeigeUebertragAnpassen(mitarbeiterId, callback) {
     return this.uebertragDialog.zeigeUebertragAnpassen(mitarbeiterId, callback);
+  }
+
+  // === Arbeitszeitmodell-Dialog (NEU) ===
+  
+  async zeigeArbeitszeitmodell(mitarbeiterId, callback) {
+    return this.arbeitszeitmodellDialog.zeigeArbeitszeitmodell(mitarbeiterId, callback);
   }
 }
 
