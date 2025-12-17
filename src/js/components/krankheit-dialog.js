@@ -123,114 +123,123 @@ class KrankheitDialog extends DialogBase {
   /**
    * Initialisiert Event-Listener für Krankheit-Dialog
    */
-  async _initKrankheitEventListener(mitarbeiterId) {
-    const vonDatumInput = document.getElementById('vonDatum');
-    const bisDatumInput = document.getElementById('bisDatum');
-    const dauerAnzeige = document.getElementById('dauerAnzeige');
-    const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
-    const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
+  /**
+ * Initialisiert Event-Listener für Krankheit-Dialog
+ * FIX: Verhindert ungewolltes Zurücksetzen des Bis-Datums
+ */
+async _initKrankheitEventListener(mitarbeiterId) {
+  const vonDatumInput = document.getElementById('vonDatum');
+  const bisDatumInput = document.getElementById('bisDatum');
+  const dauerAnzeige = document.getElementById('dauerAnzeige');
+  const feiertagsHinweiseDiv = document.getElementById('feiertagsHinweise');
+  const kollegenHinweiseDiv = document.getElementById('kollegenHinweise');
 
-    // FIX: Prüfe ob Elemente existieren
-    if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) {
-      console.warn('Krankheit-Dialog Elemente nicht gefunden');
+  // FIX: Prüfe ob Elemente existieren
+  if (!vonDatumInput || !bisDatumInput || !dauerAnzeige) {
+    console.warn('Krankheit-Dialog Elemente nicht gefunden');
+    return;
+  }
+
+  const berechneDauer = async () => {
+    const von = vonDatumInput.value;
+    const bis = bisDatumInput.value;
+    
+    if (!von || !bis) return;
+
+    if (new Date(bis) < new Date(von)) {
+      bisDatumInput.value = von;
+      dauerAnzeige.textContent = '1';
+      if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
       return;
     }
+    
+    try {
+      // Berechne Arbeitstage MIT Feiertagen (async)
+      const arbeitstage = await berechneArbeitstageAsync(von, bis);
+      dauerAnzeige.textContent = arbeitstage;
 
-    const berechneDauer = async () => {
-      const von = vonDatumInput.value;
-      const bis = bisDatumInput.value;
-      
-      if (!von || !bis) return;
-
-      if (new Date(bis) < new Date(von)) {
-        bisDatumInput.value = von;
-        dauerAnzeige.textContent = '1';
-        if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
-        return;
+      // Hole Feiertage im Zeitraum für Anzeige
+      if (feiertagsHinweiseDiv) {
+        const feiertage = await getFeiertageImZeitraum(von, bis);
+        feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
       }
-      
-      try {
-        // Berechne Arbeitstage MIT Feiertagen (async)
-        const arbeitstage = await berechneArbeitstageAsync(von, bis);
-        dauerAnzeige.textContent = arbeitstage;
 
-        // Hole Feiertage im Zeitraum für Anzeige
-        if (feiertagsHinweiseDiv) {
-          const feiertage = await getFeiertageImZeitraum(von, bis);
-          feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+      // Prüfe Kollegen-Abwesenheiten
+      if (kollegenHinweiseDiv) {
+        const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'krank');
+        kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+      }
+    } catch (error) {
+      console.error('Fehler beim Berechnen der Dauer:', error);
+    }
+  };
+
+  // FIX: Event-Listener nur auf "Von"-Datum setzt "min" für "Bis"-Datum
+  vonDatumInput.addEventListener('change', async () => {
+    // Setze min-Attribut für Bis-Datum
+    bisDatumInput.min = vonDatumInput.value;
+    
+    // NUR wenn Bis-Datum kleiner als Von-Datum ist, dann anpassen
+    if (bisDatumInput.value && bisDatumInput.value < vonDatumInput.value) {
+      bisDatumInput.value = vonDatumInput.value;
+    }
+    
+    await berechneDauer();
+  });
+
+  bisDatumInput.addEventListener('change', berechneDauer);
+
+  // Setze initiales min für Bis-Datum
+  bisDatumInput.min = vonDatumInput.value;
+
+  // Initial prüfen
+  await berechneDauer();
+
+  // Dauer-Buttons
+  document.querySelectorAll('.dauer-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tage = parseFloat(btn.dataset.tage);
+      const von = vonDatumInput.value;
+      
+      if (!von) return;
+
+      try {
+        if (tage === 0.5) {
+          bisDatumInput.value = von;
+          dauerAnzeige.textContent = '0.5';
+          if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+        } else {
+          // Berechne Enddatum MIT Feiertagen
+          const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
+          bisDatumInput.value = bis;
+          
+          // Aktualisiere Anzeige
+          const arbeitstage = await berechneArbeitstageAsync(von, bis);
+          dauerAnzeige.textContent = arbeitstage;
+          
+          // Hole Feiertage im Zeitraum
+          if (feiertagsHinweiseDiv) {
+            const feiertage = await getFeiertageImZeitraum(von, bis);
+            feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
+          }
         }
 
-        // Prüfe Kollegen-Abwesenheiten
+        // Prüfe Kollegen nach Änderung
         if (kollegenHinweiseDiv) {
-          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(mitarbeiterId, von, bis, 'krank');
+          const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+            mitarbeiterId, 
+            vonDatumInput.value, 
+            bisDatumInput.value, 
+            'krank'
+          );
           kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
         }
       } catch (error) {
-        console.error('Fehler beim Berechnen der Dauer:', error);
+        console.error('Fehler bei Dauer-Button:', error);
       }
-    };
-
-    vonDatumInput.addEventListener('change', async () => {
-      if (bisDatumInput.value < vonDatumInput.value) {
-        bisDatumInput.value = vonDatumInput.value;
-      }
-      bisDatumInput.min = vonDatumInput.value;
-      await berechneDauer();
     });
-
-    bisDatumInput.addEventListener('change', berechneDauer);
-
-    // Setze initiales min für Bis-Datum
-    bisDatumInput.min = vonDatumInput.value;
-
-    // Initial prüfen
-    await berechneDauer();
-
-    // Dauer-Buttons
-    document.querySelectorAll('.dauer-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const tage = parseFloat(btn.dataset.tage);
-        const von = vonDatumInput.value;
-        
-        if (!von) return;
-
-        try {
-          if (tage === 0.5) {
-            bisDatumInput.value = von;
-            dauerAnzeige.textContent = '0.5';
-            if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
-          } else {
-            // Berechne Enddatum MIT Feiertagen
-            const bis = await berechneEndDatumNachArbeitstagenAsync(von, tage);
-            bisDatumInput.value = bis;
-            
-            // Aktualisiere Anzeige
-            const arbeitstage = await berechneArbeitstageAsync(von, bis);
-            dauerAnzeige.textContent = arbeitstage;
-            
-            // Hole Feiertage im Zeitraum
-            if (feiertagsHinweiseDiv) {
-              const feiertage = await getFeiertageImZeitraum(von, bis);
-              feiertagsHinweiseDiv.innerHTML = this.erstelleFeiertagsHinweisHTML(feiertage);
-            }
-          }
-
-          // Prüfe Kollegen nach Änderung
-          if (kollegenHinweiseDiv) {
-            const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
-              mitarbeiterId, 
-              vonDatumInput.value, 
-              bisDatumInput.value, 
-              'krank'
-            );
-            kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
-          }
-        } catch (error) {
-          console.error('Fehler bei Dauer-Button:', error);
-        }
-      });
-    });
-  }
+  });
+}
 }
 
 // Export für Node.js
