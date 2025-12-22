@@ -42,6 +42,15 @@ class DetailDialog extends DialogBase {
               <h5 class="modal-title">
                 <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname} - Details ${jahr}
               </h5>
+               <div class="d-flex align-items-center gap-3 ms-auto me-3">
+                <button class="btn btn-outline-light btn-sm" id="btnVorigesJahr" title="Voriges Jahr">
+                  <i class="bi bi-chevron-left"></i>
+                </button>
+                <span class="fw-bold" style="min-width: 80px; text-align: center;">${jahr}</span>
+                <button class="btn btn-outline-light btn-sm" id="btnNaechstesJahr" title="Nächstes Jahr">
+                  <i class="bi bi-chevron-right"></i>
+                </button>
+              </div>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
@@ -678,8 +687,402 @@ class DetailDialog extends DialogBase {
     }
   }
 
-  async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
-    showNotification('Info', 'Bearbeiten-Funktion in Entwicklung', 'info');
+async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
+    const id = parseInt(editBtn.dataset.id);
+    const typ = editBtn.dataset.typ;
+    const von = editBtn.dataset.von;
+    const bis = editBtn.dataset.bis;
+
+    // Modal verstecken
+    modal.hide();
+
+    try {
+      // Je nach Typ den entsprechenden Bearbeitungs-Dialog aufrufen
+      if (typ === 'urlaub') {
+        await this._bearbeiteUrlaub(id, mitarbeiterId, von, bis, async () => {
+          setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        });
+      } else if (typ === 'krankheit') {
+        await this._bearbeiteKrankheit(id, mitarbeiterId, von, bis, async () => {
+          setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        });
+      } else if (typ === 'schulung') {
+        await this._bearbeiteSchulung(id, mitarbeiterId, async () => {
+          setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        });
+      } else if (typ === 'ueberstunden') {
+        await this._bearbeiteUeberstunden(id, mitarbeiterId, async () => {
+          setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+        });
+      }
+    } catch (error) {
+      console.error('Fehler beim Bearbeiten:', error);
+      showNotification('Fehler', error.message, 'danger');
+      // Modal wieder anzeigen bei Fehler
+      setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
+    }
+  }
+
+  /**
+   * Bearbeitet einen Urlaubseintrag
+   */
+  async _bearbeiteUrlaub(id, mitarbeiterId, vonDatum, bisDatum, callback) {
+    // Lade den Eintrag
+    const result = await this.dataManager.db.get('SELECT * FROM urlaub WHERE id = ?', [id]);
+    if (!result.success || !result.data) {
+      throw new Error('Urlaubseintrag nicht gefunden');
+    }
+
+    const eintrag = result.data;
+
+    const modalHtml = `
+      <div class="modal fade" id="urlaubBearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Urlaub bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="urlaubBearbeitenForm">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${eintrag.von_datum}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${eintrag.bis_datum}" required>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Urlaubstage *</label>
+                  <input type="number" class="form-control" id="tage" value="${eintrag.tage}" step="0.5" min="0.5" required>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Notiz</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-success" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('urlaubBearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const daten = {
+        von_datum: document.getElementById('vonDatum').value,
+        bis_datum: document.getElementById('bisDatum').value,
+        tage: parseFloat(document.getElementById('tage').value),
+        notiz: document.getElementById('notiz').value || null
+      };
+
+      try {
+        const updateResult = await this.dataManager.db.run(`
+          UPDATE urlaub 
+          SET von_datum = ?, bis_datum = ?, tage = ?, notiz = ?
+          WHERE id = ?
+        `, [daten.von_datum, daten.bis_datum, daten.tage, daten.notiz, id]);
+
+        if (!updateResult.success) {
+          throw new Error(updateResult.error);
+        }
+
+        this.dataManager.invalidateCache();
+        showNotification('Erfolg', 'Urlaub wurde aktualisiert', 'success');
+        if (callback) await callback();
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+  }
+
+  /**
+   * Bearbeitet einen Krankheitseintrag
+   */
+  async _bearbeiteKrankheit(id, mitarbeiterId, vonDatum, bisDatum, callback) {
+    const result = await this.dataManager.db.get('SELECT * FROM krankheit WHERE id = ?', [id]);
+    if (!result.success || !result.data) {
+      throw new Error('Krankheitseintrag nicht gefunden');
+    }
+
+    const eintrag = result.data;
+
+    const modalHtml = `
+      <div class="modal fade" id="krankheitBearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Krankheit bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="krankheitBearbeitenForm">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Von *</label>
+                    <input type="date" class="form-control" id="vonDatum" value="${eintrag.von_datum}" required>
+                  </div>
+                  <div class="col-md-6 mb-3">
+                    <label class="form-label">Bis *</label>
+                    <input type="date" class="form-control" id="bisDatum" value="${eintrag.bis_datum}" required>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Krankheitstage *</label>
+                  <input type="number" class="form-control" id="tage" value="${eintrag.tage}" step="0.5" min="0.5" required>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Notiz</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-danger" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('krankheitBearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const daten = {
+        von_datum: document.getElementById('vonDatum').value,
+        bis_datum: document.getElementById('bisDatum').value,
+        tage: parseFloat(document.getElementById('tage').value),
+        notiz: document.getElementById('notiz').value || null
+      };
+
+      try {
+        const updateResult = await this.dataManager.db.run(`
+          UPDATE krankheit 
+          SET von_datum = ?, bis_datum = ?, tage = ?, notiz = ?
+          WHERE id = ?
+        `, [daten.von_datum, daten.bis_datum, daten.tage, daten.notiz, id]);
+
+        if (!updateResult.success) {
+          throw new Error(updateResult.error);
+        }
+
+        this.dataManager.invalidateCache();
+        showNotification('Erfolg', 'Krankheit wurde aktualisiert', 'success');
+        if (callback) await callback();
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+  }
+
+  /**
+   * Bearbeitet einen Schulungseintrag
+   */
+  async _bearbeiteSchulung(id, mitarbeiterId, callback) {
+    const result = await this.dataManager.db.get('SELECT * FROM schulung WHERE id = ?', [id]);
+    if (!result.success || !result.data) {
+      throw new Error('Schulungseintrag nicht gefunden');
+    }
+
+    const eintrag = result.data;
+
+    const modalHtml = `
+      <div class="modal fade" id="schulungBearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Schulung bearbeiten
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="schulungBearbeitenForm">
+                <div class="mb-3">
+                  <label class="form-label">Datum *</label>
+                  <input type="date" class="form-control" id="datum" value="${eintrag.datum}" required>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Dauer (Tage) *</label>
+                  <input type="number" class="form-control" id="dauerTage" value="${eintrag.dauer_tage}" step="0.5" min="0.5" required>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Titel</label>
+                  <input type="text" class="form-control" id="titel" value="${eintrag.titel || ''}">
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Notiz</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-info" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('schulungBearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const daten = {
+        datum: document.getElementById('datum').value,
+        dauer_tage: parseFloat(document.getElementById('dauerTage').value),
+        titel: document.getElementById('titel').value || null,
+        notiz: document.getElementById('notiz').value || null
+      };
+
+      try {
+        const updateResult = await this.dataManager.db.run(`
+          UPDATE schulung 
+          SET datum = ?, dauer_tage = ?, titel = ?, notiz = ?
+          WHERE id = ?
+        `, [daten.datum, daten.dauer_tage, daten.titel, daten.notiz, id]);
+
+        if (!updateResult.success) {
+          throw new Error(updateResult.error);
+        }
+
+        this.dataManager.invalidateCache();
+        showNotification('Erfolg', 'Schulung wurde aktualisiert', 'success');
+        if (callback) await callback();
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
+  }
+
+  /**
+   * Bearbeitet einen Überstundeneintrag
+   */
+  async _bearbeiteUeberstunden(id, mitarbeiterId, callback) {
+    const result = await this.dataManager.db.get('SELECT * FROM ueberstunden WHERE id = ?', [id]);
+    if (!result.success || !result.data) {
+      throw new Error('Überstundeneintrag nicht gefunden');
+    }
+
+    const eintrag = result.data;
+
+    const modalHtml = `
+      <div class="modal fade" id="ueberstundenBearbeitenModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+              <h5 class="modal-title">
+                <i class="bi bi-pencil"></i> Überstunden bearbeiten
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <form id="ueberstundenBearbeitenForm">
+                <div class="mb-3">
+                  <label class="form-label">Datum *</label>
+                  <input type="date" class="form-control" id="datum" value="${eintrag.datum}" required>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Stunden *</label>
+                  <input type="number" class="form-control" id="stunden" value="${eintrag.stunden}" step="0.25" required>
+                  <small class="text-muted">Positive Werte = Aufbau, Negative Werte = Abbau</small>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label">Notiz</label>
+                  <textarea class="form-control" id="notiz" rows="2">${eintrag.notiz || ''}</textarea>
+                </div>
+              </form>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+              <button type="button" class="btn btn-warning" id="btnSpeichern">
+                <i class="bi bi-check-lg"></i> Speichern
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    await this.showModal(modalHtml, async () => {
+      const form = document.getElementById('ueberstundenBearbeitenForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return false;
+      }
+
+      const daten = {
+        datum: document.getElementById('datum').value,
+        stunden: parseFloat(document.getElementById('stunden').value),
+        notiz: document.getElementById('notiz').value || null
+      };
+
+      try {
+        const updateResult = await this.dataManager.db.run(`
+          UPDATE ueberstunden 
+          SET datum = ?, stunden = ?, notiz = ?
+          WHERE id = ?
+        `, [daten.datum, daten.stunden, daten.notiz, id]);
+
+        if (!updateResult.success) {
+          throw new Error(updateResult.error);
+        }
+
+        this.dataManager.invalidateCache();
+        showNotification('Erfolg', 'Überstunden wurden aktualisiert', 'success');
+        if (callback) await callback();
+        return true;
+      } catch (error) {
+        showNotification('Fehler', error.message, 'danger');
+        return false;
+      }
+    });
   }
 
   _getEintragConfig(typ) {

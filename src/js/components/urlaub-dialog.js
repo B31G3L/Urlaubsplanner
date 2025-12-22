@@ -13,6 +13,8 @@
  * VERBESSERT: Austrittsdatum-Validierung
  * - Urlaub kann nicht nach Austrittsdatum eingetragen werden
  * - Proaktive Warnung bei baldiger Austritt
+ * 
+ * NEU: Halber Tag Button hinzugefügt
  */
 
 class UrlaubDialog extends DialogBase {
@@ -87,6 +89,7 @@ class UrlaubDialog extends DialogBase {
                   <div class="mt-2">
                     <small class="text-muted d-block mb-1">Schnellauswahl:</small>
                     <div class="d-flex gap-2 flex-wrap">
+                      <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="0.5">Halber Tag</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="1">1 Tag</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="2">2 Tage</button>
                       <button type="button" class="btn btn-sm btn-outline-success dauer-btn" data-tage="3">3 Tage</button>
@@ -454,7 +457,8 @@ class UrlaubDialog extends DialogBase {
         const bisDate = new Date(bis + 'T00:00:00');
         const kalenderTage = Math.ceil((bisDate - vonDate) / (1000 * 60 * 60 * 24)) + 1;
         
-        if (urlaubstage < kalenderTage) {
+        // WICHTIG: Bei halben Tagen (0.5) keine Warnung anzeigen
+        if (urlaubstage >= 1 && urlaubstage < kalenderTage) {
           if (arbeitszeitInfo && arbeitszeitInfoText) {
             arbeitszeitInfo.classList.remove('d-none');
             const freieTage = kalenderTage - urlaubstage;
@@ -559,6 +563,34 @@ class UrlaubDialog extends DialogBase {
         if (!von) return;
 
         try {
+          // SPEZIALFALL: Halber Tag (0.5)
+          if (tage === 0.5) {
+            // Bis-Datum = Von-Datum (gleicher Tag)
+            bisDatumInput.value = von;
+            dauerAnzeige.textContent = '0.5';
+            
+            // Prüfe Urlaubsgrenze
+            pruefeUrlaubGrenze(0.5);
+            
+            // Keine Feiertags- oder Arbeitszeitmodell-Hinweise bei halbem Tag
+            if (feiertagsHinweiseDiv) feiertagsHinweiseDiv.innerHTML = '';
+            if (arbeitszeitInfo) arbeitszeitInfo.classList.add('d-none');
+            
+            // Prüfe Kollegen trotzdem
+            if (kollegenHinweiseDiv) {
+              const abwesenheiten = await this.pruefeKollegenAbwesenheiten(
+                mitarbeiterId, 
+                von, 
+                von, 
+                'urlaub'
+              );
+              kollegenHinweiseDiv.innerHTML = this.erstelleKollegenHinweisHTML(abwesenheiten);
+            }
+            
+            return;
+          }
+          
+          // Normaler Fall: Ganze Tage
           // Berechne Enddatum MIT Arbeitszeitmodell
           const bis = await this._berechneEndDatumNachUrlaubstagen(von, tage, mitarbeiterId);
           bisDatumInput.value = bis;

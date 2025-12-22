@@ -643,6 +643,10 @@ class TeamplannerDataManager {
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
    * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
    */
+  /**
+   * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
+   * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
+   */
   async speichereEintrag(eintrag) {
     try {
       const typ = eintrag.typ;
@@ -658,10 +662,11 @@ class TeamplannerDataManager {
         const vonDatum = this._parseDatumLokal(datum);
         const bisDatum = new Date(vonDatum);
         
-        // FIX: Bei halben Tagen (0.5) oder 1 Tag bleibt bisDatum = vonDatum
-        // Bei mehr als 1 Tag: bisDatum = vonDatum + (aufgerundete Tage - 1)
-        const ganzeTage = Math.ceil(wert);
-        if (ganzeTage > 1) {
+        // FIX: Bei halben Tagen (0.5) und 1 Tag bleibt bisDatum = vonDatum
+        // Bei mehr als 1 Tag: bisDatum = vonDatum + (Tage - 1)
+        // WICHTIG: Nur bei MEHR als 1 Tag das Datum verschieben
+        if (wert > 1) {
+          const ganzeTage = Math.floor(wert);
           bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
         }
 
@@ -688,9 +693,9 @@ class TeamplannerDataManager {
         const vonDatum = this._parseDatumLokal(datum);
         const bisDatum = new Date(vonDatum);
         
-        // FIX: Gleiche Logik wie bei Urlaub
-        const ganzeTage = Math.ceil(wert);
-        if (ganzeTage > 1) {
+        // FIX: Gleiche Logik wie bei Urlaub - nur bei MEHR als 1 Tag verschieben
+        if (wert > 1) {
+          const ganzeTage = Math.floor(wert);
           bisDatum.setDate(bisDatum.getDate() + ganzeTage - 1);
         }
 
@@ -748,7 +753,45 @@ class TeamplannerDataManager {
       throw error;
     }
   }
+ /**
+   * Gibt das Arbeitszeitmodell eines Mitarbeiters zurück
+   * NEU: Für Urlaubsberechnung mit freien Tagen
+   */
+  async getArbeitszeitmodell(mitarbeiterId) {
+    const result = await this.db.query(`
+      SELECT wochentag, arbeitszeit 
+      FROM arbeitszeitmodell 
+      WHERE mitarbeiter_id = ?
+      ORDER BY wochentag
+    `, [mitarbeiterId]);
+    
+    return result.success ? result.data : [];
+  }
 
+  /**
+   * Speichert das Arbeitszeitmodell eines Mitarbeiters
+   * NEU: Für Arbeitszeitmodell-Dialog
+   */
+  async speichereArbeitszeitmodell(mitarbeiterId, modell) {
+    try {
+      // Lösche altes Modell
+      await this.db.run('DELETE FROM arbeitszeitmodell WHERE mitarbeiter_id = ?', [mitarbeiterId]);
+      
+      // Füge neues Modell ein
+      for (const tag of modell) {
+        await this.db.run(`
+          INSERT INTO arbeitszeitmodell (mitarbeiter_id, wochentag, arbeitszeit)
+          VALUES (?, ?, ?)
+        `, [mitarbeiterId, tag.wochentag, tag.arbeitszeit]);
+      }
+      
+      this.invalidateCache();
+      return true;
+    } catch (error) {
+      console.error('Fehler beim Speichern des Arbeitszeitmodells:', error);
+      throw error;
+    }
+  }
   /**
    * Gibt verfügbare Jahre zurück
    * FIX: Korrekte Datenextraktion
