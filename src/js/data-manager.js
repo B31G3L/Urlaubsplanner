@@ -12,6 +12,7 @@
  * NEU:
  * - Filter für Mitarbeiter nach Austrittsjahr
  * - Manueller Übertrag kann gesetzt werden
+ * - ÜBERSTUNDEN KUMULATIV: Werden jetzt über Jahre hinweg addiert (nicht jährlich zurückgesetzt)
  */
 
 class TeamplannerDataManager {
@@ -354,6 +355,7 @@ class TeamplannerDataManager {
   /**
    * Gibt Statistik für einen Mitarbeiter zurück
    * FIX: Korrekte Datenextraktion überall
+   * NEU: Überstunden werden KUMULATIV berechnet (über alle Jahre)
    */
   async getMitarbeiterStatistik(mitarbeiterId) {
     const mitarbeiterResult = await this.db.get(`
@@ -392,12 +394,12 @@ class TeamplannerDataManager {
         AND strftime('%Y', datum) = ?
     `, [mitarbeiterId, this.aktuellesJahr.toString()]);
 
-    // Überstunden - FIX
+    // Überstunden - NEU: KUMULATIV über alle Jahre bis einschließlich aktuelles Jahr
     const ueberstundenResult = await this.db.get(`
       SELECT COALESCE(SUM(stunden), 0) as summe
       FROM ueberstunden
       WHERE mitarbeiter_id = ?
-        AND strftime('%Y', datum) = ?
+        AND strftime('%Y', datum) <= ?
     `, [mitarbeiterId, this.aktuellesJahr.toString()]);
 
     return {
@@ -639,10 +641,6 @@ class TeamplannerDataManager {
     return (result.success && result.data && result.data.count > 0);
   }
 
-  /**
-   * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
-   * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check
-   */
   /**
    * Speichert einen Eintrag (Urlaub, Krankheit, etc.)
    * FIX: Korrekte Fehlerbehandlung + Zeitzonen-Fix + Halbe-Tage-Fix + Überlappungs-Check

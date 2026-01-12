@@ -4,6 +4,7 @@
  * 
  * ANGEPASST:
  * - Spalten "Übertrag" und "Verfügbar" entfernt
+ * - Spalte "Überstunden" nach "Rest" verschoben
  * - Keine Zahlenfarben mehr
  * - Kompaktere Darstellung
  * - Abteilungszeilen MIT Farbe
@@ -35,7 +36,7 @@ class MitarbeiterTabelle {
     if (this.aktuelleStatistiken.length === 0) {
       this.tbody.innerHTML = `
         <tr>
-          <td colspan="8" class="text-center text-muted py-5">
+          <td colspan="7" class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
             Keine Mitarbeiter gefunden
           </td>
@@ -106,7 +107,7 @@ class MitarbeiterTabelle {
     
     // Erstelle TD mit gleicher Farbe (doppelte Absicherung)
     const td = document.createElement('td');
-    td.colSpan = 8;
+    td.colSpan = 7;
     td.className = 'fw-bold text-white';
     // Wichtig: Farbe auch auf TD setzen!
     td.style.backgroundColor = abteilung.farbe;
@@ -135,6 +136,7 @@ class MitarbeiterTabelle {
 
   /**
    * Erstellt eine Tabellenzeile
+   * NEU: Spalten-Reihenfolge angepasst (Überstunden nach Rest)
    */
   createRow(stat, nr) {
     const tr = document.createElement('tr');
@@ -160,7 +162,7 @@ class MitarbeiterTabelle {
       </span>`;
     }
 
-    // SPALTEN: Nr, Name, Genommen, Rest, Krank, Schulung, Überstunden, Aktionen
+    // NEU: Spalten-Reihenfolge: Name, Genommen, Rest, Überstunden, Krank, Schulung, Aktionen
     tr.innerHTML = `
       <td class="clickable clickable-name fw-bold" data-id="${stat.mitarbeiter.id}" data-action="details">
         ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
@@ -168,9 +170,9 @@ class MitarbeiterTabelle {
       </td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
       <td>${stat.urlaub_rest.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="krank">${stat.krankheitstage.toFixed(1)}</td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="schulung">${stat.schulungstage.toFixed(1)}</td>
-      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="bearbeiten">
         <button class="btn btn-sm btn-outline-primary" title="Bearbeiten">
           <i class="bi bi-pencil"></i>
