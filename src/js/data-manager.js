@@ -13,6 +13,7 @@
  * - Filter für Mitarbeiter nach Austrittsjahr
  * - Manueller Übertrag kann gesetzt werden
  * - ÜBERSTUNDEN KUMULATIV: Werden jetzt über Jahre hinweg addiert (nicht jährlich zurückgesetzt)
+ * - ÜBERSTUNDEN DETAILS: Aufgeteilt in Übertrag, Gemacht, Abgebaut
  */
 
 class TeamplannerDataManager {
@@ -350,6 +351,73 @@ class TeamplannerDataManager {
     
     // Auf 0.5 Tage runden
     return Math.round(anteiligerUrlaub * 2) / 2;
+  }
+
+  /**
+   * Berechnet Überstunden-Übertrag aus dem Vorjahr
+   * Summe ALLER Überstunden bis Ende des Vorjahres
+   * NEU: Für detaillierte Überstunden-Anzeige
+   */
+  async getUeberstundenUebertrag(mitarbeiterId, jahr) {
+    const vorjahr = jahr - 1;
+    
+    const result = await this.db.get(`
+      SELECT COALESCE(SUM(stunden), 0) as summe
+      FROM ueberstunden
+      WHERE mitarbeiter_id = ?
+        AND strftime('%Y', datum) <= ?
+    `, [mitarbeiterId, vorjahr.toString()]);
+    
+    return (result.success && result.data) ? result.data.summe : 0;
+  }
+
+  /**
+   * Berechnet im aktuellen Jahr GEMACHTE Überstunden (positive Werte)
+   * NEU: Für detaillierte Überstunden-Anzeige
+   */
+  async getUeberstundenGemachtImJahr(mitarbeiterId, jahr) {
+    const result = await this.db.get(`
+      SELECT COALESCE(SUM(stunden), 0) as summe
+      FROM ueberstunden
+      WHERE mitarbeiter_id = ?
+        AND strftime('%Y', datum) = ?
+        AND stunden > 0
+    `, [mitarbeiterId, jahr.toString()]);
+    
+    return (result.success && result.data) ? result.data.summe : 0;
+  }
+
+  /**
+   * Berechnet im aktuellen Jahr ABGEBAUTE Überstunden (negative Werte, als positive Zahl)
+   * NEU: Für detaillierte Überstunden-Anzeige
+   */
+  async getUeberstundenAbbauImJahr(mitarbeiterId, jahr) {
+    const result = await this.db.get(`
+      SELECT COALESCE(ABS(SUM(stunden)), 0) as summe
+      FROM ueberstunden
+      WHERE mitarbeiter_id = ?
+        AND strftime('%Y', datum) = ?
+        AND stunden < 0
+    `, [mitarbeiterId, jahr.toString()]);
+    
+    return (result.success && result.data) ? result.data.summe : 0;
+  }
+
+  /**
+   * Gibt detaillierte Überstunden-Statistik zurück
+   * NEU: Unterscheidet zwischen Übertrag, Gemacht und Abgebaut
+   */
+  async getUeberstundenDetails(mitarbeiterId, jahr) {
+    const uebertrag = await this.getUeberstundenUebertrag(mitarbeiterId, jahr);
+    const gemacht = await this.getUeberstundenGemachtImJahr(mitarbeiterId, jahr);
+    const abgebaut = await this.getUeberstundenAbbauImJahr(mitarbeiterId, jahr);
+    
+    return {
+      uebertrag: uebertrag,
+      gemacht: gemacht,
+      abgebaut: abgebaut,
+      saldo: uebertrag + gemacht - abgebaut
+    };
   }
 
   /**
@@ -751,7 +819,8 @@ class TeamplannerDataManager {
       throw error;
     }
   }
- /**
+
+  /**
    * Gibt das Arbeitszeitmodell eines Mitarbeiters zurück
    * NEU: Für Urlaubsberechnung mit freien Tagen
    */
@@ -790,6 +859,7 @@ class TeamplannerDataManager {
       throw error;
     }
   }
+
   /**
    * Gibt verfügbare Jahre zurück
    * FIX: Korrekte Datenextraktion

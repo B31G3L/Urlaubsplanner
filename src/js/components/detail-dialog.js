@@ -35,7 +35,7 @@ class DetailDialog extends DialogBase {
     const ma = stat.mitarbeiter;
     const eintraege = await this._ladeAlleEintraege(mitarbeiterId, jahr);
     const alleEintraegeSortiert = this._kombiniereUndSortiereEintraege(eintraege);
-    const ueberstundenGemacht = await this._berechneUeberstundenGemacht(mitarbeiterId, jahr);
+    const ueberstundenDetails = await this.dataManager.getUeberstundenDetails(mitarbeiterId, jahr);
     const anzahlNachTyp = this._zaehleEintraegeNachTyp(alleEintraegeSortiert);
 
     const modalHtml = `
@@ -220,32 +220,38 @@ class DetailDialog extends DialogBase {
                     </div>
 
                     <!-- Überstunden ${jahr} -->
-                    <div class="card bg-dark">
-                      <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
-                        <div class="d-flex justify-content-between align-items-center">
-                          <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
-                          <i class="bi bi-plus-circle text-warning"></i>
-                        </div>
-                      </div>
-                      <div class="card-body">
-                        <table class="table table-sm table-borderless mb-0">
-                          <tr>
-                            <td class="text-muted" style="width: 40%;">Gemacht:</td>
-                            <td class="fw-bold text-success">+${ueberstundenGemacht.toFixed(1)}h</td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Abgebaut:</td>
-                            <td class="fw-bold text-danger">${(stat.ueberstunden - ueberstundenGemacht).toFixed(1)}h</td>
-                          </tr>
-                          <tr class="border-top">
-                            <td class="text-muted fw-bold">Saldo:</td>
-                            <td class="fs-5 fw-bold ${stat.ueberstunden >= 0 ? 'text-success' : 'text-danger'}">
-                              ${stat.ueberstunden >= 0 ? '+' : ''}${stat.ueberstunden.toFixed(1)}h
-                            </td>
-                          </tr>
-                        </table>
-                      </div>
-                    </div>
+<div class="card bg-dark">
+  <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
+    <div class="d-flex justify-content-between align-items-center">
+      <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
+      <i class="bi bi-plus-circle text-warning"></i>
+    </div>
+  </div>
+  <div class="card-body">
+    <table class="table table-sm table-borderless mb-0">
+      <tr>
+        <td class="text-muted" style="width: 40%;">Übertrag ${jahr-1}:</td>
+        <td class="fw-bold ${ueberstundenDetails.uebertrag >= 0 ? 'text-success' : 'text-danger'}">
+          ${ueberstundenDetails.uebertrag >= 0 ? '+' : ''}${ueberstundenDetails.uebertrag.toFixed(1)}h
+        </td>
+      </tr>
+      <tr>
+        <td class="text-muted">Gemacht ${jahr}:</td>
+        <td class="fw-bold text-success">+${ueberstundenDetails.gemacht.toFixed(1)}h</td>
+      </tr>
+      <tr>
+        <td class="text-muted">Abgebaut ${jahr}:</td>
+        <td class="fw-bold text-danger">-${ueberstundenDetails.abgebaut.toFixed(1)}h</td>
+      </tr>
+      <tr class="border-top">
+        <td class="text-muted fw-bold">Saldo:</td>
+        <td class="fs-5 fw-bold ${ueberstundenDetails.saldo >= 0 ? 'text-success' : 'text-danger'}">
+          ${ueberstundenDetails.saldo >= 0 ? '+' : ''}${ueberstundenDetails.saldo.toFixed(1)}h
+        </td>
+      </tr>
+    </table>
+  </div>
+</div>
 
                   </div>
                 </div>
@@ -1215,19 +1221,7 @@ async _handleEdit(editBtn, mitarbeiterId, modal, jahr) {
     };
   }
 
-  async _berechneUeberstundenGemacht(mitarbeiterId, jahr) {
-    const jahrStr = jahr.toString();
-    
-    const result = await this.dataManager.db.query(`
-      SELECT stunden FROM ueberstunden 
-      WHERE mitarbeiter_id = ? 
-        AND strftime('%Y', datum) = ?
-        AND stunden > 0
-    `, [mitarbeiterId, jahrStr]);
-    
-    if (!result.success || !result.data) return 0;
-    return result.data.reduce((sum, row) => sum + row.stunden, 0);
-  }
+ 
 
   _kombiniereUndSortiereEintraege(eintraege) {
     const alle = [];
