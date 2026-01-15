@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <!-- Navigation -->
+  <!-- Hauptnavigation -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
     <div class="container-fluid">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -23,65 +23,32 @@
 
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav">
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="bi bi-person-plus"></i> Mitarbeiter
+          <li class="nav-item">
+            <a class="nav-link" href="#" id="navStammdaten" data-nav="stammdaten">
+              <i class="bi bi-person-badge"></i> Stammdaten
             </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#" id="menuStammdatenHinzufuegen">
-                <i class="bi bi-plus-circle"></i> Mitarbeiter anlegen
-              </a></li>
-              <li><a class="dropdown-item" href="#" id="menuStammdatenVerwalten">
-                <i class="bi bi-people"></i> Mitarbeiter verwalten
-              </a></li>
-            </ul>
           </li>
 
           <li class="nav-item">
-            <a class="nav-link" href="#" id="menuKalender">
-              <i class="bi bi-calendar3"></i> Kalender
+            <a class="nav-link active" href="#" id="navUrlaubsplaner" data-nav="urlaubsplaner">
+              <i class="bi bi-calendar-check"></i> Urlaubsplaner
             </a>
           </li>
 
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="bi bi-building"></i> Einstellungen
+          <li class="nav-item">
+            <a class="nav-link" href="#" id="navEinstellungen" data-nav="einstellungen">
+              <i class="bi bi-gear"></i> Einstellungen
             </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#" id="menuAbteilungenVerwalten">
-                <i class="bi bi-list-ul"></i> Abteilungen
-              </a></li>
-              <li><a class="dropdown-item" href="#" id="menuFeiertageVerwalten">
-                <i class="bi bi-calendar3"></i> Feiertage
-              </a></li>
-              <li><a class="dropdown-item" href="#" id="menuVeranstaltungenVerwalten">
-                <i class="bi bi-calendar-event"></i> Veranstaltungen
-              </a></li>
-            </ul>
           </li>
 
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-              <i class="bi bi-download"></i> Export
-            </a>
-            <ul class="dropdown-menu">
-              <li><a class="dropdown-item" href="#" id="menuExportCSV">
-                <i class="bi bi-file-earmark-spreadsheet"></i> Als CSV exportieren
-              </a></li>
-              <li><a class="dropdown-item" href="#" id="menuExportExcel">
-                <i class="bi bi-file-earmark-excel"></i> Als Excel exportieren
-              </a></li>
-            </ul>
-          </li>
-
-          <!-- Logs Menü -->
-          <li class="nav-item dropdown">
+          <!-- System Menü rechts -->
+          <li class="nav-item dropdown ms-auto">
             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
               <i class="bi bi-terminal"></i> System
             </a>
-            <ul class="dropdown-menu">
+            <ul class="dropdown-menu dropdown-menu-end">
               <li><a class="dropdown-item" href="#" id="menuLogs">
-                <i class="bi bi-file-text"></i> System-Logs anzeigen
+                <i class="bi bi-file-text"></i> System-Logs
               </a></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="#" id="menuInfo">
@@ -91,6 +58,15 @@
           </li>
         </ul>
       </div>
+    </div>
+  </nav>
+
+  <!-- Subnavigation (dynamisch je nach Hauptmenü) -->
+  <nav class="subnav navbar navbar-dark bg-secondary border-bottom" id="subnavigation">
+    <div class="container-fluid">
+      <ul class="navbar-nav flex-row gap-3" id="subnavContent">
+        <!-- Wird dynamisch gefüllt -->
+      </ul>
     </div>
   </nav>
 

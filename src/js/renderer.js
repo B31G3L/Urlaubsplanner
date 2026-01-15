@@ -2,11 +2,7 @@
  * Teamplanner - Renderer Process
  * Orchestriert die gesamte App
  * 
- * FIX: CSV-Export mit BOM für Excel-Kompatibilität
- * FIX: Memory Leak bei Blob-URL behoben
- * FIX: Haupttabelle wird nach Detail-Dialog-Änderungen aktualisiert
- * NEU: Übertrag-Anpassung hinzugefügt
- * NEU: Log-Viewer und App-Info Menü implementiert
+ * NEU: Zweistufige Navigation mit Hauptmenü und Submenüs
  */
 
 // Globale Variablen
@@ -16,6 +12,143 @@ let tabelle;
 let dialogManager;
 let kalenderAnsicht;
 let aktuelleAnsicht = 'tabelle'; // 'tabelle' oder 'kalender'
+let aktuellesHauptmenu = 'urlaubsplaner'; // 'stammdaten', 'urlaubsplaner', 'einstellungen'
+
+/**
+ * Subnavigation-Konfiguration
+ */
+const SUBNAV_CONFIG = {
+  stammdaten: [
+    {
+      id: 'subMitarbeiterHinzufuegen',
+      icon: 'bi-plus-circle',
+      text: 'Mitarbeiter anlegen',
+      action: () => dialogManager.zeigeStammdatenHinzufuegen(async () => await loadData())
+    },
+    {
+      id: 'subMitarbeiterVerwalten',
+      icon: 'bi-people',
+      text: 'Mitarbeiter verwalten',
+      action: () => dialogManager.zeigeStammdatenVerwalten(async () => await loadData())
+    }
+  ],
+  
+  urlaubsplaner: [
+    {
+      id: 'subKalender',
+      icon: 'bi-calendar3',
+      text: 'Kalender',
+      action: async () => {
+        if (aktuelleAnsicht !== 'kalender') {
+          await toggleAnsicht();
+        }
+      }
+    },
+    {
+      id: 'subExportCSV',
+      icon: 'bi-file-earmark-spreadsheet',
+      text: 'CSV Export',
+      action: () => exportToCSV()
+    },
+    {
+      id: 'subExportExcel',
+      icon: 'bi-file-earmark-excel',
+      text: 'Excel Export',
+      action: () => showNotification('Info', 'Excel-Export ist noch nicht implementiert', 'info')
+    }
+  ],
+  
+  einstellungen: [
+    {
+      id: 'subAbteilungen',
+      icon: 'bi-building',
+      text: 'Abteilungen',
+      action: () => dialogManager.zeigeAbteilungenVerwalten(async () => {
+        await loadData();
+        await updateAbteilungFilter();
+      })
+    },
+    {
+      id: 'subFeiertage',
+      icon: 'bi-calendar-event',
+      text: 'Feiertage',
+      action: () => dialogManager.zeigeFeiertagVerwalten(async () => await loadData())
+    },
+    {
+      id: 'subVeranstaltungen',
+      icon: 'bi-calendar-check',
+      text: 'Veranstaltungen',
+      action: () => dialogManager.zeigeVeranstaltungVerwalten(async () => await loadData())
+    }
+  ]
+};
+
+/**
+ * Aktualisiert die Subnavigation basierend auf dem aktiven Hauptmenü
+ */
+function updateSubnavigation(hauptmenu) {
+  const subnavContent = document.getElementById('subnavContent');
+  const subnavContainer = document.getElementById('subnavigation');
+  
+  if (!subnavContent || !subnavContainer) return;
+  
+  // Leere Subnavigation
+  subnavContent.innerHTML = '';
+  
+  // Hole Submenü-Items
+  const items = SUBNAV_CONFIG[hauptmenu] || [];
+  
+  if (items.length === 0) {
+    // Keine Subitems - verstecke Subnavigation
+    subnavContainer.classList.add('d-none');
+    return;
+  }
+  
+  // Zeige Subnavigation
+  subnavContainer.classList.remove('d-none');
+  
+  // Erstelle Submenü-Items
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'nav-item';
+    
+    const a = document.createElement('a');
+    a.className = 'nav-link';
+    a.href = '#';
+    a.id = item.id;
+    a.innerHTML = `<i class="bi ${item.icon}"></i> ${item.text}`;
+    
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      item.action();
+    });
+    
+    li.appendChild(a);
+    subnavContent.appendChild(li);
+  });
+}
+
+/**
+ * Setzt das aktive Hauptmenü
+ */
+function setAktivesHauptmenu(menu) {
+  // Entferne 'active' von allen Hauptmenü-Items
+  document.querySelectorAll('#navbarNav .nav-link').forEach(link => {
+    link.classList.remove('active');
+  });
+  
+  // Setze 'active' auf gewähltes Item
+  const activeLink = document.querySelector(`[data-nav="${menu}"]`);
+  if (activeLink) {
+    activeLink.classList.add('active');
+  }
+  
+  // Speichere aktuelles Hauptmenü
+  aktuellesHauptmenu = menu;
+  
+  // Aktualisiere Subnavigation
+  updateSubnavigation(menu);
+}
 
 /**
  * App initialisieren
@@ -112,6 +245,18 @@ async function toggleAnsicht() {
  * UI initialisieren (Event Listener, etc.)
  */
 async function initUI() {
+  // Hauptnavigation Event-Listener
+  document.querySelectorAll('[data-nav]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const menu = link.dataset.nav;
+      setAktivesHauptmenu(menu);
+    });
+  });
+  
+  // Initiale Subnavigation setzen
+  updateSubnavigation(aktuellesHauptmenu);
+
   // Jahr-Auswahl
   const jahrSelect = document.getElementById('jahrSelect');
   const verfuegbareJahre = await dataManager.getVerfuegbareJahre();
@@ -157,65 +302,13 @@ async function initUI() {
     await tabelle.suchen(e.target.value, abteilung);
   });
 
-  // Menü-Items
-  document.getElementById('menuStammdatenHinzufuegen').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenHinzufuegen(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuStammdatenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeStammdatenVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuAbteilungenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeAbteilungenVerwalten(async () => {
-      await loadData();
-      await updateAbteilungFilter();
-    });
-  });
-
-  document.getElementById('menuFeiertageVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeFeiertagVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  document.getElementById('menuVeranstaltungenVerwalten').addEventListener('click', (e) => {
-    e.preventDefault();
-    dialogManager.zeigeVeranstaltungVerwalten(async () => {
-      await loadData();
-    });
-  });
-
-  // Kalender-Menü - jetzt Toggle statt Modal
-  document.getElementById('menuKalender').addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (aktuelleAnsicht !== 'kalender') {
-      await toggleAnsicht();
-    }
-  });
-
-  // Ansicht-Toggle Button in Toolbar
-  document.getElementById('btnAnsichtToggle').addEventListener('click', async (e) => {
-    e.preventDefault();
-    await toggleAnsicht();
-  });
-
-  // Log-Viewer Menü (NEU)
+  // System-Menü
   document.getElementById('menuLogs').addEventListener('click', async (e) => {
     e.preventDefault();
     const logViewer = new LogViewer();
     await logViewer.zeigen();
   });
 
-  // App-Info Menü (NEU)
   document.getElementById('menuInfo').addEventListener('click', async (e) => {
     e.preventDefault();
     try {
@@ -243,16 +336,6 @@ Statistik:
     }
   });
 
-  document.getElementById('menuExportCSV').addEventListener('click', (e) => {
-    e.preventDefault();
-    exportToCSV();
-  });
-
-  document.getElementById('menuExportExcel').addEventListener('click', (e) => {
-    e.preventDefault();
-    showNotification('Info', 'Excel-Export ist noch nicht implementiert', 'info');
-  });
-
   // Toolbar-Buttons
   document.getElementById('btnAktualisieren').addEventListener('click', async (e) => {
     e.preventDefault();
@@ -266,6 +349,12 @@ Statistik:
     showNotification('Aktualisiert', 'Daten wurden neu geladen', 'success');
   });
 
+  // Ansicht-Toggle Button in Toolbar
+  document.getElementById('btnAnsichtToggle').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await toggleAnsicht();
+  });
+
   // Event Delegation für klickbare Tabellenzellen
   document.getElementById('mitarbeiterTabelleBody').addEventListener('click', async (e) => {
     const clickable = e.target.closest('.clickable');
@@ -277,9 +366,7 @@ Statistik:
 
     switch (action) {
       case 'details':
-        // Zeige Detail-Dialog und warte auf Schließen
         await dialogManager.zeigeDetails(mitarbeiterId, dataManager.aktuellesJahr);
-        // Detail-Dialog wurde geschlossen, lade Daten neu
         console.log('🔄 Detail-Dialog geschlossen - aktualisiere Haupttabelle');
         await loadData();
         if (aktuelleAnsicht === 'kalender') {
@@ -374,8 +461,6 @@ async function loadData() {
 
 /**
  * Exportiert Daten als CSV
- * FIX: BOM hinzugefügt für korrekte Umlaut-Darstellung in Excel
- * FIX: Memory Leak bei Blob-URL behoben
  */
 async function exportToCSV() {
   try {
@@ -386,13 +471,9 @@ async function exportToCSV() {
       return;
     }
 
-    // FIX: BOM (Byte Order Mark) für UTF-8 mit Excel-Kompatibilität
     const BOM = '\uFEFF';
-    
-    // CSV Header
     let csv = BOM + 'Vorname;Nachname;Abteilung;Anspruch;Übertrag;Verfügbar;Genommen;Rest;Krank;Schulung;Überstunden\n';
 
-    // Hilfsfunktion: Escape Semikolons in Feldern
     const escapeField = (field) => {
       if (field && field.toString().includes(';')) {
         return `"${field}"`;
@@ -400,7 +481,6 @@ async function exportToCSV() {
       return field;
     };
 
-    // Daten
     stats.forEach(stat => {
       const ma = stat.mitarbeiter;
       csv += `${escapeField(ma.vorname)};${escapeField(ma.nachname)};${escapeField(ma.abteilung_name)};`;
@@ -409,7 +489,6 @@ async function exportToCSV() {
       csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;
     });
 
-    // Datei speichern (Electron API)
     if (window.electronAPI) {
       const result = await window.electronAPI.showSaveDialog({
         title: 'CSV Exportieren',
@@ -425,14 +504,12 @@ async function exportToCSV() {
         showNotification('Export erfolgreich', `Daten wurden exportiert`, 'success');
       }
     } else {
-      // Fallback für Browser (Download)
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
       link.href = url;
       link.download = `teamplanner_export_${dataManager.aktuellesJahr}.csv`;
       link.click();
-      // FIX: URL wieder freigeben um Memory Leak zu verhindern
       setTimeout(() => URL.revokeObjectURL(url), 100);
       showNotification('Export erfolgreich', 'CSV wurde heruntergeladen', 'success');
     }
