@@ -75,13 +75,13 @@ class MitarbeiterTabelle {
         </span>
       </td>
       <td>${stat.mitarbeiter.urlaubstage_jahr}</td>
-      <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)}</td>
-      <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)}</td>
-      <td class="text-warning">${stat.urlaub_genommen.toFixed(1)}</td>
-      <td class="${restClass}">${stat.urlaub_rest.toFixed(1)}</td>
-      <td class="text-danger">${stat.krankheitstage.toFixed(1)}</td>
-      <td class="text-info">${stat.schulungstage.toFixed(1)}</td>
-      <td class="text-warning">${stat.ueberstunden.toFixed(1)}</td>
+      <td class="text-info">${formatZahl(stat.uebertrag_vorjahr)}</td>
+      <td class="fw-bold">${formatZahl(stat.urlaub_verfuegbar)}</td>
+      <td class="text-warning">${formatZahl(stat.urlaub_genommen)}</td>
+      <td class="${restClass}">${formatZahl(stat.urlaub_rest)}</td>
+      <td class="text-danger">${formatZahl(stat.krankheitstage)}</td>
+      <td class="text-info">${formatZahl(stat.schulungstage)}</td>
+      <td class="text-warning">${formatZahl(stat.ueberstunden)}</td>
       <td>
         <div class="btn-group btn-group-sm" role="group">
           <button class="btn btn-outline-primary btn-details" data-id="${stat.mitarbeiter.id}" title="Details">
@@ -120,19 +120,19 @@ class MitarbeiterTabelle {
 
     // Gesamt Urlaub
     const gesamtUrlaub = stats.reduce((sum, s) => sum + s.urlaub_genommen, 0);
-    document.getElementById('statUrlaub').textContent = `${gesamtUrlaub.toFixed(1)} Tage`;
+    document.getElementById('statUrlaub').textContent = `${formatZahl(gesamtUrlaub)} Tage`;
 
     // Gesamt Krank
     const gesamtKrank = stats.reduce((sum, s) => sum + s.krankheitstage, 0);
-    document.getElementById('statKrank').textContent = `${gesamtKrank.toFixed(1)} Tage`;
+    document.getElementById('statKrank').textContent = `${formatZahl(gesamtKrank)} Tage`;
 
     // Gesamt Schulung
     const gesamtSchulung = stats.reduce((sum, s) => sum + s.schulungstage, 0);
-    document.getElementById('statSchulung').textContent = `${gesamtSchulung.toFixed(1)} Tage`;
+    document.getElementById('statSchulung').textContent = `${formatZahl(gesamtSchulung)} Tage`;
 
     // Gesamt Überstunden
     const gesamtUeberstunden = stats.reduce((sum, s) => sum + s.ueberstunden, 0);
-    document.getElementById('statUeberstunden').textContent = `${gesamtUeberstunden.toFixed(1)} Std.`;
+    document.getElementById('statUeberstunden').textContent = `${formatZahl(gesamtUeberstunden)} Std.`;
   }
 
   /**

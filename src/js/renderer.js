@@ -260,33 +260,33 @@ function zeigeDetails(mitarbeiterId) {
                   </tr>
                   <tr>
                     <th>Übertrag:</th>
-                    <td class="text-info">${stat.uebertrag_vorjahr.toFixed(1)} Tage</td>
+                    <td class="text-info">${formatZahl(stat.uebertrag_vorjahr)} Tage</td>
                   </tr>
                   <tr>
                     <th>Verfügbar:</th>
-                    <td class="fw-bold">${stat.urlaub_verfuegbar.toFixed(1)} Tage</td>
+                    <td class="fw-bold">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
                   </tr>
                   <tr>
                     <th>Genommen:</th>
-                    <td class="text-warning">${stat.urlaub_genommen.toFixed(1)} Tage</td>
+                    <td class="text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
                   </tr>
                   <tr>
                     <th>Rest:</th>
                     <td class="${stat.urlaub_rest < 0 ? 'text-danger' : 'text-success'} fw-bold">
-                      ${stat.urlaub_rest.toFixed(1)} Tage
+                      ${formatZahl(stat.urlaub_rest)} Tage
                     </td>
                   </tr>
                   <tr>
                     <th>Krankheitstage:</th>
-                    <td class="text-danger">${stat.krankheitstage.toFixed(1)} Tage</td>
+                    <td class="text-danger">${formatZahl(stat.krankheitstage)} Tage</td>
                   </tr>
                   <tr>
                     <th>Schulungstage:</th>
-                    <td class="text-info">${stat.schulungstage.toFixed(1)} Tage</td>
+                    <td class="text-info">${formatZahl(stat.schulungstage)} Tage</td>
                   </tr>
                   <tr>
                     <th>Überstunden:</th>
-                    <td class="text-warning">${stat.ueberstunden.toFixed(1)} Std.</td>
+                    <td class="text-warning">${formatZahl(stat.ueberstunden)} Std.</td>
                   </tr>
                 </table>
               </div>
@@ -328,9 +328,9 @@ async function exportToCSV() {
     stats.forEach(stat => {
       const ma = stat.mitarbeiter;
       csv += `${ma.id};${ma.vorname};${ma.nachname};${ma.abteilung_name};`;
-      csv += `${ma.urlaubstage_jahr};${stat.uebertrag_vorjahr.toFixed(1)};${stat.urlaub_verfuegbar.toFixed(1)};`;
-      csv += `${stat.urlaub_genommen.toFixed(1)};${stat.urlaub_rest.toFixed(1)};${stat.krankheitstage.toFixed(1)};`;
-      csv += `${stat.schulungstage.toFixed(1)};${stat.ueberstunden.toFixed(1)}\n`;
+      csv += `${ma.urlaubstage_jahr};${formatZahl(stat.uebertrag_vorjahr)};${formatZahl(stat.urlaub_verfuegbar)};`;
+      csv += `${formatZahl(stat.urlaub_genommen)};${formatZahl(stat.urlaub_rest)};${formatZahl(stat.krankheitstage)};`;
+      csv += `${formatZahl(stat.schulungstage)};${formatZahl(stat.ueberstunden)}\n`;
     });
 
     // Datei speichern (Electron API)
