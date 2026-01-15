@@ -191,29 +191,29 @@ class DetailDialog extends DialogBase {
                         <table class="table table-sm table-borderless mb-0">
                           <tr>
                             <td class="text-muted" style="width: 40%;">Anspruch:</td>
-                            <td class="fw-bold">${stat.urlaubsanspruch.toFixed(1)} Tage</td>
+                            <td class="fw-bold">${formatZahl(stat.urlaubsanspruch)} Tage</td>
                           </tr>
                           <tr>
                             <td class="text-muted">Übertrag ${jahr-1}:</td>
                             <td>
                               <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
-                                ${stat.uebertrag_vorjahr.toFixed(1)} Tage
+                                ${formatZahl(stat.uebertrag_vorjahr)} Tage
                                 <i class="bi bi-pencil-square text-info ms-1"></i>
                               </span>
                             </td>
                           </tr>
                           <tr>
                             <td class="text-muted">Verfügbar:</td>
-                            <td class="fw-bold text-info">${stat.urlaub_verfuegbar.toFixed(1)} Tage</td>
+                            <td class="fw-bold text-info">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
                           </tr>
                           <tr>
                             <td class="text-muted">Genommen:</td>
-                            <td class="fw-bold text-warning">${stat.urlaub_genommen.toFixed(1)} Tage</td>
+                            <td class="fw-bold text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
                           </tr>
                           <tr class="border-top">
                             <td class="text-muted fw-bold">Resturlaub:</td>
                             <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
-                              ${stat.urlaub_rest.toFixed(1)} Tage
+                              ${formatZahl(stat.urlaub_rest)} Tage
                             </td>
                           </tr>
                         </table>
@@ -233,21 +233,21 @@ class DetailDialog extends DialogBase {
       <tr>
         <td class="text-muted" style="width: 40%;">Übertrag ${jahr-1}:</td>
         <td class="fw-bold ${ueberstundenDetails.uebertrag >= 0 ? 'text-success' : 'text-danger'}">
-          ${ueberstundenDetails.uebertrag >= 0 ? '+' : ''}${ueberstundenDetails.uebertrag.toFixed(1)}h
+          ${ueberstundenDetails.uebertrag >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.uebertrag)}h
         </td>
       </tr>
       <tr>
         <td class="text-muted">Gemacht ${jahr}:</td>
-        <td class="fw-bold text-success">+${ueberstundenDetails.gemacht.toFixed(1)}h</td>
+        <td class="fw-bold text-success">+${formatZahl(ueberstundenDetails.gemacht)}h</td>
       </tr>
       <tr>
         <td class="text-muted">Abgebaut ${jahr}:</td>
-        <td class="fw-bold text-danger">-${ueberstundenDetails.abgebaut.toFixed(1)}h</td>
+        <td class="fw-bold text-danger">-${formatZahl(ueberstundenDetails.abgebaut)}h</td>
       </tr>
       <tr class="border-top">
         <td class="text-muted fw-bold">Saldo:</td>
         <td class="fs-5 fw-bold ${ueberstundenDetails.saldo >= 0 ? 'text-success' : 'text-danger'}">
-          ${ueberstundenDetails.saldo >= 0 ? '+' : ''}${ueberstundenDetails.saldo.toFixed(1)}h
+          ${ueberstundenDetails.saldo >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.saldo)}h
         </td>
       </tr>
     </table>
@@ -272,7 +272,7 @@ class DetailDialog extends DialogBase {
                                 <div class="text-muted small mb-1">
                                   <i class="bi bi-bandaid"></i> Krankheit ${jahr}
                                 </div>
-                                <div class="fs-3 fw-bold text-danger">${stat.krankheitstage.toFixed(1)}</div>
+                                <div class="fs-3 fw-bold text-danger">${formatZahl(stat.krankheitstage)}</div>
                                 <div class="text-muted small">Tage</div>
                               </div>
                               <i class="bi bi-plus-circle fs-4 text-danger opacity-50"></i>
@@ -290,7 +290,7 @@ class DetailDialog extends DialogBase {
                                 <div class="text-muted small mb-1">
                                   <i class="bi bi-book"></i> Schulung ${jahr}
                                 </div>
-                                <div class="fs-3 fw-bold text-info">${stat.schulungstage.toFixed(1)}</div>
+                                <div class="fs-3 fw-bold text-info">${formatZahl(stat.schulungstage)}</div>
                                 <div class="text-muted small">Tage</div>
                               </div>
                               <i class="bi bi-plus-circle fs-4 text-info opacity-50"></i>
@@ -633,11 +633,11 @@ class DetailDialog extends DialogBase {
     switch (eintrag.typ) {
       case 'urlaub':
         hauptInfo = `${formatDatumAnzeige(eintrag.von_datum)} - ${formatDatumAnzeige(eintrag.bis_datum)}`;
-        nebenInfo = `<strong>${eintrag.tage.toFixed(1)}</strong> Tage`;
+        nebenInfo = `<strong>${formatZahl(eintrag.tage)}</strong> Tage`;
         break;
       case 'krankheit':
         hauptInfo = `${formatDatumAnzeige(eintrag.von_datum)} - ${formatDatumAnzeige(eintrag.bis_datum)}`;
-        nebenInfo = `<strong>${eintrag.tage.toFixed(1)}</strong> Tage`;
+        nebenInfo = `<strong>${formatZahl(eintrag.tage)}</strong> Tage`;
         break;
       case 'schulung':
         // FIX: End-Datum berechnen und anzeigen
@@ -652,12 +652,12 @@ class DetailDialog extends DialogBase {
         } else {
           hauptInfo = `${formatDatumAnzeige(eintrag.datum)} - ${formatDatumAnzeige(endDatumStr)}`;
         }
-        nebenInfo = `<strong>${eintrag.dauer_tage.toFixed(1)}</strong> Tage`;
+        nebenInfo = `<strong>${formatZahl(eintrag.dauer_tage)}</strong> Tage`;
         break;
       case 'ueberstunden':
         hauptInfo = formatDatumAnzeige(eintrag.datum);
         const vorzeichen = eintrag.stunden >= 0 ? '+' : '';
-        nebenInfo = `<strong>${vorzeichen}${eintrag.stunden.toFixed(1)}</strong> Std.`;
+        nebenInfo = `<strong>${vorzeichen}${formatZahl(eintrag.stunden)}</strong> Std.`;
         break;
     }
 

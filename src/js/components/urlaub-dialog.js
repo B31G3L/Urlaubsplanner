@@ -37,7 +37,7 @@ class UrlaubDialog extends DialogBase {
                     <i class="bi bi-calendar-check"></i> 
                     <strong>Verfügbarer Resturlaub:</strong>
                   </span>
-                  <span class="fs-5 fw-bold" id="restUrlaubAnzeige">${restUrlaub.toFixed(1)} Tage</span>
+                  <span class="fs-5 fw-bold" id="restUrlaubAnzeige">${formatZahl(restUrlaub)} Tage</span>
                 </div>
               </div>
 
@@ -136,7 +136,7 @@ class UrlaubDialog extends DialogBase {
 
       // VALIDIERUNG: Prüfe ob genug Resturlaub vorhanden ist
       if (tage > restUrlaub) {
-        showNotification('Fehler', `Nicht genügend Resturlaub! Verfügbar: ${restUrlaub.toFixed(1)} Tage, Angefragt: ${tage} Tage`, 'danger');
+        showNotification('Fehler', `Nicht genügend Resturlaub! Verfügbar: ${formatZahl(restUrlaub)} Tage, Angefragt: ${tage} Tage`, 'danger');
         return false;
       }
 

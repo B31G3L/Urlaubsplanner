@@ -1,0 +1,64 @@
+/**
+ * Mitarbeiter-Tabelle: Einheitliche Spaltenbreiten und zentrierte Inhalte
+ */
+
+/* Tabellen-Layout fixieren */
+#mitarbeiterTabelle {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Name-Spalte: Breiter, linksbündig */
+#mitarbeiterTabelle thead th:nth-child(1),
+#mitarbeiterTabelle tbody td:nth-child(1) {
+  width: 25%;
+  text-align: left;
+  padding-left: 1rem;
+}
+
+/* Alle Datenspalten: Gleiche Breite, zentriert */
+#mitarbeiterTabelle thead th:nth-child(2),
+#mitarbeiterTabelle thead th:nth-child(3),
+#mitarbeiterTabelle thead th:nth-child(4),
+#mitarbeiterTabelle thead th:nth-child(5),
+#mitarbeiterTabelle thead th:nth-child(6),
+#mitarbeiterTabelle tbody td:nth-child(2),
+#mitarbeiterTabelle tbody td:nth-child(3),
+#mitarbeiterTabelle tbody td:nth-child(4),
+#mitarbeiterTabelle tbody td:nth-child(5),
+#mitarbeiterTabelle tbody td:nth-child(6) {
+  width: 10%;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Aktionen-Spalte: Etwas breiter für Buttons */
+#mitarbeiterTabelle thead th:nth-child(7),
+#mitarbeiterTabelle tbody td:nth-child(7) {
+  width: 15%;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Badges in der Mitte ausrichten */
+#mitarbeiterTabelle .badge {
+  display: inline-block;
+  min-width: 50px;
+  text-align: center;
+}
+
+/* Button-Gruppe zentrieren */
+#mitarbeiterTabelle .btn-group {
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* Vertikale Ausrichtung aller Zellen */
+#mitarbeiterTabelle td {
+  vertical-align: middle;
+}
+
+/* Header-Zellen auch mittig */
+#mitarbeiterTabelle thead th {
+  vertical-align: middle;
+}

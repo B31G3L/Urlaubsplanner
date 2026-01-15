@@ -194,8 +194,8 @@ class StammdatenAnsicht {
                 </div>
                 <div class="info-content">
                   <div class="info-label">Urlaub ${this.dataManager.aktuellesJahr}</div>
-                  <div class="info-value">${stat.urlaub_genommen.toFixed(1)} / ${stat.urlaub_verfuegbar.toFixed(1)}</div>
-                  <div class="info-detail">Rest: <strong>${stat.urlaub_rest.toFixed(1)}</strong> Tage</div>
+                  <div class="info-value">${formatZahl(stat.urlaub_genommen)} / ${formatZahl(stat.urlaub_verfuegbar)}</div>
+                  <div class="info-detail">Rest: <strong>${formatZahl(stat.urlaub_rest)}</strong> Tage</div>
                 </div>
               </div>
             </div>
@@ -208,7 +208,7 @@ class StammdatenAnsicht {
                 </div>
                 <div class="info-content">
                   <div class="info-label">Überstunden</div>
-                  <div class="info-value">${stat.ueberstunden >= 0 ? '+' : ''}${stat.ueberstunden.toFixed(1)}h</div>
+                  <div class="info-value">${stat.ueberstunden >= 0 ? '+' : ''}${formatZahl(stat.ueberstunden)}h</div>
                   <div class="info-detail">Wochenstunden: ${ma.wochenstunden || 40}h</div>
                 </div>
               </div>
@@ -222,7 +222,7 @@ class StammdatenAnsicht {
                 </div>
                 <div class="info-content">
                   <div class="info-label">Krankheitstage ${this.dataManager.aktuellesJahr}</div>
-                  <div class="info-value">${stat.krankheitstage.toFixed(1)}</div>
+                  <div class="info-value">${formatZahl(stat.krankheitstage)}</div>
                 </div>
               </div>
             </div>
@@ -235,7 +235,7 @@ class StammdatenAnsicht {
                 </div>
                 <div class="info-content">
                   <div class="info-label">Schulungstage ${this.dataManager.aktuellesJahr}</div>
-                  <div class="info-value">${stat.schulungstage.toFixed(1)}</div>
+                  <div class="info-value">${formatZahl(stat.schulungstage)}</div>
                 </div>
               </div>
             </div>

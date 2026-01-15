@@ -38,7 +38,7 @@ class UebertragDialog extends DialogBase {
               <div class="mb-3">
                 <p><strong>Mitarbeiter:</strong> ${ma.vorname} ${ma.nachname}</p>
                 <p><strong>Jahr:</strong> ${jahr}</p>
-                <p><strong>Aktueller Übertrag:</strong> ${aktuellerWert.toFixed(1)} Tage
+                <p><strong>Aktueller Übertrag:</strong> ${formatZahl(aktuellerWert)} Tage
                   ${aktuellAngepasst ? '<span class="badge bg-warning text-dark ms-2">Manuell angepasst</span>' : '<span class="badge bg-secondary ms-2">Automatisch berechnet</span>'}
                 </p>
               </div>
@@ -53,7 +53,7 @@ class UebertragDialog extends DialogBase {
                 <div class="mb-3">
                   <label class="form-label">Neuer Übertrag (Tage) *</label>
                   <input type="number" class="form-control" id="uebertragTage" 
-                         value="${aktuellerWert.toFixed(1)}" 
+                         value="${formatZahl(aktuellerWert)}" 
                          step="0.5" min="0" max="100" required>
                   <small class="form-text text-muted">
                     Dieser Wert wird für ${jahr} verwendet und überschreibt die automatische Berechnung.
@@ -114,7 +114,7 @@ class UebertragDialog extends DialogBase {
 
       try {
         await this.dataManager.setManuellAngepassterUebertrag(mitarbeiterId, jahr, tage, notiz);
-        showNotification('Erfolg', `Übertrag wurde auf ${tage.toFixed(1)} Tage angepasst`, 'success');
+        showNotification('Erfolg', `Übertrag wurde auf ${formatZahl(tage)} Tage angepasst`, 'success');
         if (callback) await callback();
         return true;
       } catch (error) {

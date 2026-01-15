@@ -168,11 +168,11 @@ class MitarbeiterTabelle {
         ${stat.mitarbeiter.vorname} ${stat.mitarbeiter.nachname}
         ${austrittsInfo}
       </td>
-      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${stat.urlaub_genommen.toFixed(1)}</td>
-      <td>${stat.urlaub_rest.toFixed(1)}</td>
-      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${stat.ueberstunden.toFixed(1)}</td>
-      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="krank">${stat.krankheitstage.toFixed(1)}</td>
-      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="schulung">${stat.schulungstage.toFixed(1)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="urlaub">${formatZahl(stat.urlaub_genommen)}</td>
+      <td>${formatZahl(stat.urlaub_rest)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="ueberstunden">${formatZahl(stat.ueberstunden)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="krank">${formatZahl(stat.krankheitstage)}</td>
+      <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="schulung">${formatZahl(stat.schulungstage)}</td>
       <td class="clickable" data-id="${stat.mitarbeiter.id}" data-action="bearbeiten">
         <button class="btn btn-sm btn-outline-primary" title="Bearbeiten">
           <i class="bi bi-pencil"></i>

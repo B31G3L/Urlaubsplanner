@@ -657,7 +657,7 @@ class DialogBase {
       html += `
         <li class="${a.klasse}">
           <strong>${a.name}</strong> - ${a.typ} 
-          (${vonFormatiert} - ${bisFormatiert}, ${a.tage.toFixed(1)} Tage)
+          (${vonFormatiert} - ${bisFormatiert}, ${formatZahl(a.tage)} Tage)
           ${a.titel ? `<br><small class="text-muted">${a.titel}</small>` : ''}
         </li>
       `;
