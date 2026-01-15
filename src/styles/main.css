@@ -159,13 +159,7 @@ header.bg-primary {
   line-height: 1.3;
 }
 
-/* Abteilungs-Header Zeile - MIT FARBE (WICHTIG!) */
-.abteilung-header {
-  position: sticky;
-  top: 34px; /* Angepasst für kleineren Header */
-  z-index: 4;
-}
-
+/* Abteilungs-Header Zeile - KEIN STICKY MEHR (scrollt normal durch) */
 .abteilung-header td {
   font-size: 0.85rem;
   letter-spacing: 0.3px;
