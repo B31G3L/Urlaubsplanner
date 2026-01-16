@@ -91,7 +91,6 @@ def create_pdf(data, jahr, output_path):
         table_data.append(row)
     
     # Tabelle erstellen
-    # Spaltenbreiten anpassen (Querformat A4 ist ca. 27cm nutzbar)
     col_widths = [2.2*cm, 2.2*cm, 3*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.5*cm, 1.5*cm, 1.8*cm, 2*cm]
     
     table = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -108,17 +107,15 @@ def create_pdf(data, jahr, output_path):
         ('TOPPADDING', (0, 0), (-1, 0), 12),
         
         # Daten-Style
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),  # Vorname, Nachname links
-        ('ALIGN', (2, 1), (-1, -1), 'CENTER'),  # Rest zentriert
+        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
+        ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('TOPPADDING', (0, 1), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 1), (-1, -1), 6),
         
-        # Alternating row colors
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
         
-        # Grid
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
@@ -133,15 +130,17 @@ if __name__ == "__main__":
         if len(sys.argv) != 4:
             print(json.dumps({
                 "success": False,
-                "error": "Usage: export_pdf.py <data_json> <jahr> <output_path>"
+                "error": "Usage: export_pdf.py <json_file_path> <jahr> <output_path>"
             }))
             sys.exit(1)
         
-        data_json = sys.argv[1]
+        json_file_path = sys.argv[1]
         jahr = sys.argv[2]
         output_path = sys.argv[3]
         
-        data = json.loads(data_json)
+        # Lese JSON aus Datei statt aus Command-Line
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
         create_pdf(data, jahr, output_path)
         

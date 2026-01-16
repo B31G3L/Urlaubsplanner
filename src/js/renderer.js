@@ -486,10 +486,6 @@ async function loadData() {
     showNotification('Fehler', `Daten konnten nicht geladen werden: ${error.message}`, 'danger');
   }
 }
-
-/**
- * Exportiert Daten als Excel
- */
 async function exportToExcel() {
   try {
     showNotification('Export', 'Excel-Export wird erstellt...', 'info');
@@ -503,46 +499,86 @@ async function exportToExcel() {
 
     // Daten vorbereiten
     const exportData = stats.map(stat => ({
-      vorname: stat.vorname,
-      nachname: stat.nachname,
-      abteilung: stat.abteilung,
-      urlaub_anspruch: stat.urlaub_anspruch,
-      urlaub_uebertrag: stat.urlaub_uebertrag,
+      vorname: stat.mitarbeiter.vorname,
+      nachname: stat.mitarbeiter.nachname,
+      abteilung: stat.mitarbeiter.abteilung_name,
+      urlaub_anspruch: stat.urlaubsanspruch,
+      urlaub_uebertrag: stat.uebertrag_vorjahr,
       urlaub_genommen: stat.urlaub_genommen,
-      krankheit: stat.krankheit,
-      schulung: stat.schulung,
+      krankheit: stat.krankheitstage,
+      schulung: stat.schulungstage,
       ueberstunden: stat.ueberstunden
     }));
 
     const dataJson = JSON.stringify(exportData);
     const jahr = dataManager.aktuellesJahr;
+    
+    // WICHTIG: Temporäre Datei für JSON-Daten verwenden statt Command-Line
+    const tempJsonPath = `/mnt/user-data/outputs/temp_export_${Date.now()}.json`;
     const outputPath = `/mnt/user-data/outputs/teamplanner_${jahr}.xlsx`;
+
+    // Schreibe JSON-Daten in temporäre Datei
+    const writeResult = await window.electronAPI.writeFile(tempJsonPath, dataJson);
+    
+    if (!writeResult.success) {
+      throw new Error(`Konnte temporäre Datei nicht schreiben: ${writeResult.error}`);
+    }
 
     // Script-Verzeichnis vom Main-Process holen
     const scriptDir = await window.electronAPI.getScriptDirectory();
+    const scriptPath = `${scriptDir}/src/js/export_excel.py`;
 
-    // Python-Script aufrufen
+    console.log('🐍 Rufe Python-Script auf:', scriptPath);
+    console.log('📊 Temp JSON:', tempJsonPath);
+    console.log('📁 Output:', outputPath);
+
+    // Python-Script mit Dateipfad statt JSON-String aufrufen
     const result = await window.electronAPI.executeCommand(
       'python3',
-      [`${scriptDir}/export_excel.py`, dataJson, jahr.toString(), outputPath]
+      [scriptPath, tempJsonPath, jahr.toString(), outputPath]
     );
 
-    const response = JSON.parse(result.stdout);
+    console.log('📤 Exit Code:', result.code);
+    console.log('📤 STDOUT:', result.stdout);
+    console.log('📤 STDERR:', result.stderr);
+
+    // Lösche temporäre JSON-Datei (optional, wird bei nächstem Export überschrieben)
+    // Ignoriere Fehler beim Löschen
+
+    // Fehlerbehandlung
+    if (result.code !== 0) {
+      throw new Error(`Excel-Export fehlgeschlagen (Exit Code ${result.code}):\n${result.stderr}`);
+    }
+
+    if (!result.stdout || result.stdout.trim() === '') {
+      throw new Error(`Python-Script gab keine Ausgabe zurück.\nStderr: ${result.stderr}`);
+    }
+
+    let response;
+    try {
+      response = JSON.parse(result.stdout.trim());
+    } catch (parseError) {
+      throw new Error(`JSON Parse Fehler: ${parseError.message}\nOutput: ${result.stdout}`);
+    }
 
     if (response.success) {
-      showNotification('Export erfolgreich', `Excel-Datei wurde erstellt: teamplanner_${jahr}.xlsx`, 'success');
+      showNotification('Export erfolgreich', `Excel-Datei wurde erstellt`, 'success');
+      
       // Datei präsentieren
-      await window.electronAPI.presentFile(outputPath);
+      try {
+        await window.electronAPI.presentFile(outputPath);
+      } catch (presentError) {
+        console.warn('⚠️ Datei konnte nicht präsentiert werden:', presentError);
+      }
     } else {
-      throw new Error(response.error || 'Unbekannter Fehler');
+      throw new Error(response.error || 'Unbekannter Fehler beim Excel-Export');
     }
 
   } catch (error) {
-    console.error('Fehler beim Excel-Export:', error);
+    console.error('❌ Excel-Export Fehler:', error);
     showNotification('Export fehlgeschlagen', error.message, 'danger');
   }
 }
-
 /**
  * Exportiert Daten als PDF
  */
@@ -559,46 +595,83 @@ async function exportToPDF() {
 
     // Daten vorbereiten
     const exportData = stats.map(stat => ({
-      vorname: stat.vorname,
-      nachname: stat.nachname,
-      abteilung: stat.abteilung,
-      urlaub_anspruch: stat.urlaub_anspruch,
-      urlaub_uebertrag: stat.urlaub_uebertrag,
+      vorname: stat.mitarbeiter.vorname,
+      nachname: stat.mitarbeiter.nachname,
+      abteilung: stat.mitarbeiter.abteilung_name,
+      urlaub_anspruch: stat.urlaubsanspruch,
+      urlaub_uebertrag: stat.uebertrag_vorjahr,
       urlaub_genommen: stat.urlaub_genommen,
-      krankheit: stat.krankheit,
-      schulung: stat.schulung,
+      krankheit: stat.krankheitstage,
+      schulung: stat.schulungstage,
       ueberstunden: stat.ueberstunden
     }));
 
     const dataJson = JSON.stringify(exportData);
     const jahr = dataManager.aktuellesJahr;
+    
+    // WICHTIG: Temporäre Datei für JSON-Daten verwenden
+    const tempJsonPath = `/mnt/user-data/outputs/temp_export_${Date.now()}.json`;
     const outputPath = `/mnt/user-data/outputs/teamplanner_${jahr}.pdf`;
+
+    // Schreibe JSON-Daten in temporäre Datei
+    const writeResult = await window.electronAPI.writeFile(tempJsonPath, dataJson);
+    
+    if (!writeResult.success) {
+      throw new Error(`Konnte temporäre Datei nicht schreiben: ${writeResult.error}`);
+    }
 
     // Script-Verzeichnis vom Main-Process holen
     const scriptDir = await window.electronAPI.getScriptDirectory();
+    const scriptPath = `${scriptDir}/src/js/export_pdf.py`;
 
-    // Python-Script aufrufen
+    console.log('🐍 Rufe Python-Script auf:', scriptPath);
+    console.log('📊 Temp JSON:', tempJsonPath);
+    console.log('📁 Output:', outputPath);
+
+    // Python-Script mit Dateipfad statt JSON-String aufrufen
     const result = await window.electronAPI.executeCommand(
       'python3',
-      [`${scriptDir}/export_pdf.py`, dataJson, jahr.toString(), outputPath]
+      [scriptPath, tempJsonPath, jahr.toString(), outputPath]
     );
 
-    const response = JSON.parse(result.stdout);
+    console.log('📤 Exit Code:', result.code);
+    console.log('📤 STDOUT:', result.stdout);
+    console.log('📤 STDERR:', result.stderr);
+
+    // Fehlerbehandlung
+    if (result.code !== 0) {
+      throw new Error(`PDF-Export fehlgeschlagen (Exit Code ${result.code}):\n${result.stderr}`);
+    }
+
+    if (!result.stdout || result.stdout.trim() === '') {
+      throw new Error(`Python-Script gab keine Ausgabe zurück.\nStderr: ${result.stderr}`);
+    }
+
+    let response;
+    try {
+      response = JSON.parse(result.stdout.trim());
+    } catch (parseError) {
+      throw new Error(`JSON Parse Fehler: ${parseError.message}\nOutput: ${result.stdout}`);
+    }
 
     if (response.success) {
-      showNotification('Export erfolgreich', `PDF-Datei wurde erstellt: teamplanner_${jahr}.pdf`, 'success');
+      showNotification('Export erfolgreich', `PDF-Datei wurde erstellt`, 'success');
+      
       // Datei präsentieren
-      await window.electronAPI.presentFile(outputPath);
+      try {
+        await window.electronAPI.presentFile(outputPath);
+      } catch (presentError) {
+        console.warn('⚠️ Datei konnte nicht präsentiert werden:', presentError);
+      }
     } else {
-      throw new Error(response.error || 'Unbekannter Fehler');
+      throw new Error(response.error || 'Unbekannter Fehler beim PDF-Export');
     }
 
   } catch (error) {
-    console.error('Fehler beim PDF-Export:', error);
+    console.error('❌ PDF-Export Fehler:', error);
     showNotification('Export fehlgeschlagen', error.message, 'danger');
   }
 }
-
 /**
  * App starten wenn DOM geladen
  */

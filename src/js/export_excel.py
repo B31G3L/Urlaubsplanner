@@ -137,15 +137,17 @@ if __name__ == "__main__":
         if len(sys.argv) != 4:
             print(json.dumps({
                 "success": False,
-                "error": "Usage: export_excel.py <data_json> <jahr> <output_path>"
+                "error": "Usage: export_excel.py <json_file_path> <jahr> <output_path>"
             }))
             sys.exit(1)
         
-        data_json = sys.argv[1]
+        json_file_path = sys.argv[1]
         jahr = sys.argv[2]
         output_path = sys.argv[3]
         
-        data = json.loads(data_json)
+        # Lese JSON aus Datei statt aus Command-Line
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
         create_excel(data, jahr, output_path)
         
