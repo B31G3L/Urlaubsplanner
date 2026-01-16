@@ -3,15 +3,9 @@
  * Zeigt alle Einträge eines Mitarbeiters für ein Jahr an
  * Ermöglicht das Bearbeiten und Löschen von Einträgen
  * 
- * FIXES:
- * - Jahr-Navigation funktioniert jetzt korrekt
- * - End-Datum wird bei Schulungen angezeigt
- * - Nach Bearbeitung kehrt man zur Detailansicht zurück
- * 
- * NEUES LAYOUT:
- * - Links: ALLE Stammdaten (volle Höhe)
- * - Rechts oben: Statistik horizontal (KPI-Karten nebeneinander)
- * - Rechts unten: Einträge-Liste (scrollbar)
+ * UPDATE:
+ * - Tab 1: Stammdaten (Persönliche Daten, Arbeitsbeziehung, Arbeitszeit, Buttons)
+ * - Tab 2: Urlaubsplaner (Urlaub, Überstunden, Krankheit, Schulung, Einträge)
  */
 
 class DetailDialog extends DialogBase {
@@ -45,7 +39,7 @@ class DetailDialog extends DialogBase {
           <div class="modal-content">
             <div class="modal-header bg-primary text-white">
               <h5 class="modal-title">
-                <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname} - Details ${jahr}
+                <i class="bi bi-person-circle"></i> ${ma.vorname} ${ma.nachname}
               </h5>
                <div class="d-flex align-items-center gap-3 ms-auto me-3">
                 <button class="btn btn-outline-light btn-sm" id="btnVorigesJahr" title="Voriges Jahr">
@@ -58,312 +52,351 @@ class DetailDialog extends DialogBase {
               </div>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
+            
+            <!-- TAB NAVIGATION -->
+            <ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="stammdaten-tab" data-bs-toggle="tab" data-bs-target="#stammdaten" type="button" role="tab">
+                  <i class="bi bi-person-badge"></i> Stammdaten
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="urlaub-tab" data-bs-toggle="tab" data-bs-target="#urlaub" type="button" role="tab">
+                  <i class="bi bi-calendar-check"></i> Urlaubsplaner ${jahr}
+                </button>
+              </li>
+            </ul>
+
             <div class="modal-body p-0">
-              <div class="row g-0" style="height: calc(100vh - 120px);">
+              <div class="tab-content" id="detailTabContent">
                 
-                <!-- LINKE SPALTE: Alle Stammdaten (volle Höhe) -->
-                <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
-                  <div class="p-3">
-                    
-                    <!-- Buttons -->
-                    <div class="d-flex gap-2 mb-3">
-                      <button class="btn btn-outline-primary w-100" id="btnMitarbeiterBearbeiten">
-                        <i class="bi bi-pencil"></i> Bearbeiten
-                      </button>
-                      <div class="btn-group">
-                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                          <i class="bi bi-download"></i>
-                        </button>
-                        <ul class="dropdown-menu">
-                          <li><a class="dropdown-item" href="#" id="btnExportExcel">
-                            <i class="bi bi-file-earmark-excel text-success"></i> Excel
-                          </a></li>
-                          <li><a class="dropdown-item" href="#" id="btnExportPDF">
-                            <i class="bi bi-file-earmark-pdf text-danger"></i> PDF
-                          </a></li>
-                        </ul>
-                      </div>
-                    </div>
+                <!-- TAB 1: STAMMDATEN -->
+                <div class="tab-pane fade show active" id="stammdaten" role="tabpanel">
+                  <div class="row g-0" style="height: calc(100vh - 180px);">
+                    <div class="col-md-12" style="overflow-y: auto; background-color: #1a1a1a;">
+                      <div class="p-4">
+                        
+                        <div class="row">
+                          <div class="col-md-6">
+                            <!-- Buttons -->
+                            <div class="d-flex gap-2 mb-3">
+                              <button class="btn btn-outline-primary w-100" id="btnMitarbeiterBearbeiten">
+                                <i class="bi bi-pencil"></i> Bearbeiten
+                              </button>
+                              <div class="btn-group">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                  <i class="bi bi-download"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                  <li><a class="dropdown-item" href="#" id="btnExportExcel">
+                                    <i class="bi bi-file-earmark-excel text-success"></i> Excel
+                                  </a></li>
+                                  <li><a class="dropdown-item" href="#" id="btnExportPDF">
+                                    <i class="bi bi-file-earmark-pdf text-danger"></i> PDF
+                                  </a></li>
+                                </ul>
+                              </div>
+                            </div>
 
-                    <!-- Persönliche Daten -->
-                    <div class="card bg-dark mb-3">
-                      <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
-                      </div>
-                      <div class="card-body">
-                        <table class="table table-sm table-borderless mb-0">
-                          <tr>
-                            <td class="text-muted" style="width: 40%;">Vorname:</td>
-                            <td class="fw-bold">${ma.vorname}</td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Nachname:</td>
-                            <td class="fw-bold">${ma.nachname}</td>
-                          </tr>
-                          ${ma.email ? `
-                          <tr>
-                            <td class="text-muted">Email:</td>
-                            <td><small>${ma.email}</small></td>
-                          </tr>
-                          ` : ''}
-                          ${ma.geburtsdatum ? `
-                          <tr>
-                            <td class="text-muted">Geburtsdatum:</td>
-                            <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
-                          </tr>
-                          ` : ''}
-                        </table>
-                      </div>
-                    </div>
+                            <!-- Persönliche Daten -->
+                            <div class="card bg-dark mb-3">
+                              <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-person"></i> Persönliche Daten</h6>
+                              </div>
+                              <div class="card-body">
+                                <table class="table table-sm table-borderless mb-0">
+                                  <tr>
+                                    <td class="text-muted" style="width: 40%;">Vorname:</td>
+                                    <td class="fw-bold">${ma.vorname}</td>
+                                  </tr>
+                                  <tr>
+                                    <td class="text-muted">Nachname:</td>
+                                    <td class="fw-bold">${ma.nachname}</td>
+                                  </tr>
+                                  ${ma.email ? `
+                                  <tr>
+                                    <td class="text-muted">Email:</td>
+                                    <td><small>${ma.email}</small></td>
+                                  </tr>
+                                  ` : ''}
+                                  ${ma.geburtsdatum ? `
+                                  <tr>
+                                    <td class="text-muted">Geburtsdatum:</td>
+                                    <td>${formatDatumAnzeige(ma.geburtsdatum)}</td>
+                                  </tr>
+                                  ` : ''}
+                                </table>
+                              </div>
+                            </div>
 
-                    <!-- Arbeitsbeziehung -->
-                    <div class="card bg-dark mb-3">
-                      <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-briefcase"></i> Arbeitsbeziehung</h6>
-                      </div>
-                      <div class="card-body">
-                        <table class="table table-sm table-borderless mb-0">
-                          <tr>
-                            <td class="text-muted" style="width: 40%;">Abteilung:</td>
-                            <td>
-                              <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
-                                ${ma.abteilung_name}
-                              </span>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Eintrittsdatum:</td>
-                            <td>${formatDatumAnzeige(ma.eintrittsdatum)}</td>
-                          </tr>
-                          ${ma.austrittsdatum ? `
-                          <tr>
-                            <td class="text-muted">Austrittsdatum:</td>
-                            <td>
-                              <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
-                            </td>
-                          </tr>
-                          ` : ''}
-                          <tr>
-                            <td class="text-muted">Status:</td>
-                            <td>
-                              <span class="badge ${ma.status === 'AKTIV' ? 'bg-success' : 'bg-secondary'}">
-                                ${ma.status}
-                              </span>
-                            </td>
-                          </tr>
-                        </table>
-                      </div>
-                    </div>
+                            <!-- Arbeitsbeziehung -->
+                            <div class="card bg-dark mb-3">
+                              <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-briefcase"></i> Arbeitsbeziehung</h6>
+                              </div>
+                              <div class="card-body">
+                                <table class="table table-sm table-borderless mb-0">
+                                  <tr>
+                                    <td class="text-muted" style="width: 40%;">Abteilung:</td>
+                                    <td>
+                                      <span class="abteilung-badge" style="background-color: ${ma.abteilung_farbe}">
+                                        ${ma.abteilung_name}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td class="text-muted">Eintrittsdatum:</td>
+                                    <td>${formatDatumAnzeige(ma.eintrittsdatum)}</td>
+                                  </tr>
+                                  ${ma.austrittsdatum ? `
+                                  <tr>
+                                    <td class="text-muted">Austrittsdatum:</td>
+                                    <td>
+                                      <span class="badge bg-danger">${formatDatumAnzeige(ma.austrittsdatum)}</span>
+                                    </td>
+                                  </tr>
+                                  ` : ''}
+                                  <tr>
+                                    <td class="text-muted">Status:</td>
+                                    <td>
+                                      <span class="badge ${ma.status === 'AKTIV' ? 'bg-success' : 'bg-secondary'}">
+                                        ${ma.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
 
-                    <!-- Arbeitszeit -->
-                    <div class="card bg-dark mb-3">
-                      <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Arbeitszeit</h6>
-                      </div>
-                      <div class="card-body">
-                        <table class="table table-sm table-borderless mb-0">
-                          <tr>
-                            <td class="text-muted" style="width: 40%;">Wochenstunden:</td>
-                            <td class="fw-bold">${ma.wochenstunden || 40}h</td>
-                          </tr>
-                        </table>
-                        <div id="arbeitszeitmodellAnzeige" class="mt-2">
-                          <small class="text-muted d-block mb-1">Wochenplan:</small>
-                          <div class="text-muted small" style="line-height: 1.6;">
-                            Wird geladen...
+                          <div class="col-md-6">
+                            <!-- Arbeitszeit -->
+                            <div class="card bg-dark mb-3">
+                              <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-clock-history"></i> Arbeitszeit</h6>
+                              </div>
+                              <div class="card-body">
+                                <table class="table table-sm table-borderless mb-0">
+                                  <tr>
+                                    <td class="text-muted" style="width: 40%;">Wochenstunden:</td>
+                                    <td class="fw-bold">${ma.wochenstunden || 40}h</td>
+                                  </tr>
+                                </table>
+                                <div id="arbeitszeitmodellAnzeige" class="mt-2">
+                                  <small class="text-muted d-block mb-1">Wochenplan:</small>
+                                  <div class="text-muted small" style="line-height: 1.6;">
+                                    Wird geladen...
+                                  </div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-info mt-2 w-100" id="btnArbeitszeitmodell">
+                                  <i class="bi bi-calendar-week"></i> Bearbeiten
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <button class="btn btn-sm btn-outline-info mt-2 w-100" id="btnArbeitszeitmodell">
-                          <i class="bi bi-calendar-week"></i> Bearbeiten
-                        </button>
+
                       </div>
                     </div>
-
-                    <!-- Urlaub ${jahr} -->
-                    <div class="card bg-dark mb-3">
-                      <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
-                        <div class="d-flex justify-content-between align-items-center">
-                          <h6 class="mb-0"><i class="bi bi-calendar-check text-success"></i> Urlaub ${jahr}</h6>
-                          <i class="bi bi-plus-circle text-success"></i>
-                        </div>
-                      </div>
-                      <div class="card-body">
-                        <table class="table table-sm table-borderless mb-0">
-                          <tr>
-                            <td class="text-muted" style="width: 40%;">Anspruch:</td>
-                            <td class="fw-bold">${formatZahl(stat.urlaubsanspruch)} Tage</td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Übertrag ${jahr-1}:</td>
-                            <td>
-                              <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
-                                ${formatZahl(stat.uebertrag_vorjahr)} Tage
-                                <i class="bi bi-pencil-square text-info ms-1"></i>
-                              </span>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Verfügbar:</td>
-                            <td class="fw-bold text-info">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
-                          </tr>
-                          <tr>
-                            <td class="text-muted">Genommen:</td>
-                            <td class="fw-bold text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
-                          </tr>
-                          <tr class="border-top">
-                            <td class="text-muted fw-bold">Resturlaub:</td>
-                            <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
-                              ${formatZahl(stat.urlaub_rest)} Tage
-                            </td>
-                          </tr>
-                        </table>
-                      </div>
-                    </div>
-
-                    <!-- Überstunden ${jahr} -->
-<div class="card bg-dark">
-  <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
-    <div class="d-flex justify-content-between align-items-center">
-      <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
-      <i class="bi bi-plus-circle text-warning"></i>
-    </div>
-  </div>
-  <div class="card-body">
-    <table class="table table-sm table-borderless mb-0">
-      <tr>
-        <td class="text-muted" style="width: 40%;">Übertrag ${jahr-1}:</td>
-        <td class="fw-bold ${ueberstundenDetails.uebertrag >= 0 ? 'text-success' : 'text-danger'}">
-          ${ueberstundenDetails.uebertrag >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.uebertrag)}h
-        </td>
-      </tr>
-      <tr>
-        <td class="text-muted">Gemacht ${jahr}:</td>
-        <td class="fw-bold text-success">+${formatZahl(ueberstundenDetails.gemacht)}h</td>
-      </tr>
-      <tr>
-        <td class="text-muted">Abgebaut ${jahr}:</td>
-        <td class="fw-bold text-danger">-${formatZahl(ueberstundenDetails.abgebaut)}h</td>
-      </tr>
-      <tr class="border-top">
-        <td class="text-muted fw-bold">Saldo:</td>
-        <td class="fs-5 fw-bold ${ueberstundenDetails.saldo >= 0 ? 'text-success' : 'text-danger'}">
-          ${ueberstundenDetails.saldo >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.saldo)}h
-        </td>
-      </tr>
-    </table>
-  </div>
-</div>
-
                   </div>
                 </div>
 
-                <!-- RECHTE SPALTE: Statistik oben + Einträge unten -->
-                <div class="col-md-8" style="display: flex; flex-direction: column;">
-                  
-                  <!-- Statistik horizontal (oben, fixes Layout) -->
-                  <div class="p-3 border-bottom" style="flex-shrink: 0; background-color: #2d2d2d;">
-                    <div class="row g-3">
-                      <!-- Krankheit -->
-                      <div class="col-md-4">
-                        <div class="card bg-dark h-100 clickable" id="clickKrankheit" style="cursor: pointer; border-left: 3px solid #dc3545;">
+                <!-- TAB 2: URLAUB & ABWESENHEIT -->
+                <div class="tab-pane fade" id="urlaub" role="tabpanel">
+                  <div class="row g-0" style="height: calc(100vh - 180px);">
+                    
+                    <!-- LINKE SPALTE: Urlaub & Überstunden -->
+                    <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
+                      <div class="p-3">
+                        
+                        <!-- Urlaub ${jahr} -->
+                        <div class="card bg-dark mb-3">
+                          <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
+                            <div class="d-flex justify-content-between align-items-center">
+                              <h6 class="mb-0"><i class="bi bi-calendar-check text-success"></i> Urlaub ${jahr}</h6>
+                              <i class="bi bi-plus-circle text-success"></i>
+                            </div>
+                          </div>
                           <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                              <div>
-                                <div class="text-muted small mb-1">
-                                  <i class="bi bi-bandaid"></i> Krankheit ${jahr}
+                            <table class="table table-sm table-borderless mb-0">
+                              <tr>
+                                <td class="text-muted" style="width: 40%;">Anspruch:</td>
+                                <td class="fw-bold">${formatZahl(stat.urlaubsanspruch)} Tage</td>
+                              </tr>
+                              <tr>
+                                <td class="text-muted">Übertrag ${jahr-1}:</td>
+                                <td>
+                                  <span class="clickable" id="clickUebertrag" style="cursor: pointer;" title="Klicken zum Anpassen">
+                                    ${formatZahl(stat.uebertrag_vorjahr)} Tage
+                                    <i class="bi bi-pencil-square text-info ms-1"></i>
+                                  </span>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td class="text-muted">Verfügbar:</td>
+                                <td class="fw-bold text-info">${formatZahl(stat.urlaub_verfuegbar)} Tage</td>
+                              </tr>
+                              <tr>
+                                <td class="text-muted">Genommen:</td>
+                                <td class="fw-bold text-warning">${formatZahl(stat.urlaub_genommen)} Tage</td>
+                              </tr>
+                              <tr class="border-top">
+                                <td class="text-muted fw-bold">Resturlaub:</td>
+                                <td class="fs-5 fw-bold ${stat.urlaub_rest < 0 ? 'text-danger' : stat.urlaub_rest < 5 ? 'text-warning' : 'text-success'}">
+                                  ${formatZahl(stat.urlaub_rest)} Tage
+                                </td>
+                              </tr>
+                            </table>
+                          </div>
+                        </div>
+
+                        <!-- Überstunden ${jahr} -->
+                        <div class="card bg-dark">
+                          <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
+                            <div class="d-flex justify-content-between align-items-center">
+                              <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
+                              <i class="bi bi-plus-circle text-warning"></i>
+                            </div>
+                          </div>
+                          <div class="card-body">
+                            <table class="table table-sm table-borderless mb-0">
+                              <tr>
+                                <td class="text-muted" style="width: 40%;">Übertrag ${jahr-1}:</td>
+                                <td class="fw-bold ${ueberstundenDetails.uebertrag >= 0 ? 'text-success' : 'text-danger'}">
+                                  ${ueberstundenDetails.uebertrag >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.uebertrag)}h
+                                </td>
+                              </tr>
+                              <tr>
+                                <td class="text-muted">Gemacht ${jahr}:</td>
+                                <td class="fw-bold text-success">+${formatZahl(ueberstundenDetails.gemacht)}h</td>
+                              </tr>
+                              <tr>
+                                <td class="text-muted">Abgebaut ${jahr}:</td>
+                                <td class="fw-bold text-danger">-${formatZahl(ueberstundenDetails.abgebaut)}h</td>
+                              </tr>
+                              <tr class="border-top">
+                                <td class="text-muted fw-bold">Saldo:</td>
+                                <td class="fs-5 fw-bold ${ueberstundenDetails.saldo >= 0 ? 'text-success' : 'text-danger'}">
+                                  ${ueberstundenDetails.saldo >= 0 ? '+' : ''}${formatZahl(ueberstundenDetails.saldo)}h
+                                </td>
+                              </tr>
+                            </table>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    <!-- RECHTE SPALTE: Statistik oben + Einträge unten -->
+                    <div class="col-md-8" style="display: flex; flex-direction: column;">
+                      
+                      <!-- Statistik horizontal (oben, fixes Layout) -->
+                      <div class="p-3 border-bottom" style="flex-shrink: 0; background-color: #2d2d2d;">
+                        <div class="row g-3">
+                          <!-- Krankheit -->
+                          <div class="col-md-4">
+                            <div class="card bg-dark h-100 clickable" id="clickKrankheit" style="cursor: pointer; border-left: 3px solid #dc3545;">
+                              <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                  <div>
+                                    <div class="text-muted small mb-1">
+                                      <i class="bi bi-bandaid"></i> Krankheit ${jahr}
+                                    </div>
+                                    <div class="fs-3 fw-bold text-danger">${formatZahl(stat.krankheitstage)}</div>
+                                    <div class="text-muted small">Tage</div>
+                                  </div>
+                                  <i class="bi bi-plus-circle fs-4 text-danger opacity-50"></i>
                                 </div>
-                                <div class="fs-3 fw-bold text-danger">${formatZahl(stat.krankheitstage)}</div>
-                                <div class="text-muted small">Tage</div>
                               </div>
-                              <i class="bi bi-plus-circle fs-4 text-danger opacity-50"></i>
+                            </div>
+                          </div>
+
+                          <!-- Schulung -->
+                          <div class="col-md-4">
+                            <div class="card bg-dark h-100 clickable" id="clickSchulung" style="cursor: pointer; border-left: 3px solid #17a2b8;">
+                              <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                  <div>
+                                    <div class="text-muted small mb-1">
+                                      <i class="bi bi-book"></i> Schulung ${jahr}
+                                    </div>
+                                    <div class="fs-3 fw-bold text-info">${formatZahl(stat.schulungstage)}</div>
+                                    <div class="text-muted small">Tage</div>
+                                  </div>
+                                  <i class="bi bi-plus-circle fs-4 text-info opacity-50"></i>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <!-- Gesamt Einträge -->
+                          <div class="col-md-4">
+                            <div class="card bg-dark h-100" style="border-left: 3px solid #6c757d;">
+                              <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                  <div>
+                                    <div class="text-muted small mb-1">
+                                      <i class="bi bi-list-ul"></i> Alle Einträge
+                                    </div>
+                                    <div class="fs-3 fw-bold">${alleEintraegeSortiert.length}</div>
+                                    <div class="text-muted small">Einträge insgesamt</div>
+                                  </div>
+                                  <i class="bi bi-collection fs-4 opacity-50"></i>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <!-- Schulung -->
-                      <div class="col-md-4">
-                        <div class="card bg-dark h-100 clickable" id="clickSchulung" style="cursor: pointer; border-left: 3px solid #17a2b8;">
-                          <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                              <div>
-                                <div class="text-muted small mb-1">
-                                  <i class="bi bi-book"></i> Schulung ${jahr}
-                                </div>
-                                <div class="fs-3 fw-bold text-info">${formatZahl(stat.schulungstage)}</div>
-                                <div class="text-muted small">Tage</div>
+                      <!-- Einträge-Liste (unten, scrollbar) -->
+                      <div style="flex: 1; overflow-y: auto; background-color: #1a1a1a;">
+                        <div class="p-3">
+                          <!-- Toolbar -->
+                          <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">
+                              <i class="bi bi-list-ul"></i> Alle Einträge (${alleEintraegeSortiert.length})
+                            </h6>
+                            <div class="d-flex gap-2">
+                              <!-- Sortierung -->
+                              <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-light sortierung-btn active" data-sort="desc" title="Neueste zuerst">
+                                  <i class="bi bi-sort-down"></i>
+                                </button>
+                                <button type="button" class="btn btn-outline-light sortierung-btn" data-sort="asc" title="Älteste zuerst">
+                                  <i class="bi bi-sort-up"></i>
+                                </button>
                               </div>
-                              <i class="bi bi-plus-circle fs-4 text-info opacity-50"></i>
                             </div>
                           </div>
-                        </div>
-                      </div>
 
-                      <!-- Gesamt Einträge -->
-                      <div class="col-md-4">
-                        <div class="card bg-dark h-100" style="border-left: 3px solid #6c757d;">
-                          <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                              <div>
-                                <div class="text-muted small mb-1">
-                                  <i class="bi bi-list-ul"></i> Alle Einträge
-                                </div>
-                                <div class="fs-3 fw-bold">${alleEintraegeSortiert.length}</div>
-                                <div class="text-muted small">Einträge insgesamt</div>
-                              </div>
-                              <i class="bi bi-collection fs-4 opacity-50"></i>
-                            </div>
+                          <!-- Filter Buttons -->
+                          <div class="d-flex gap-2 flex-wrap mb-3">
+                            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn active" data-filter="alle">
+                              <i class="bi bi-list"></i> Alle <span class="badge bg-secondary">${alleEintraegeSortiert.length}</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success filter-btn" data-filter="urlaub">
+                              <i class="bi bi-calendar-check"></i> Urlaub <span class="badge bg-success">${anzahlNachTyp.urlaub}</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger filter-btn" data-filter="krankheit">
+                              <i class="bi bi-bandaid"></i> Krankheit <span class="badge bg-danger">${anzahlNachTyp.krankheit}</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info filter-btn" data-filter="schulung">
+                              <i class="bi bi-book"></i> Schulung <span class="badge bg-info">${anzahlNachTyp.schulung}</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning filter-btn" data-filter="ueberstunden">
+                              <i class="bi bi-clock"></i> Überstunden <span class="badge bg-warning text-dark">${anzahlNachTyp.ueberstunden}</span>
+                            </button>
+                          </div>
+
+                          <!-- Einträge Container -->
+                          <div id="eintraegeContainer">
+                            ${this._renderAlleEintraege(alleEintraegeSortiert)}
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <!-- Einträge-Liste (unten, scrollbar) -->
-                  <div style="flex: 1; overflow-y: auto; background-color: #1a1a1a;">
-                    <div class="p-3">
-                      <!-- Toolbar -->
-                      <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">
-                          <i class="bi bi-list-ul"></i> Alle Einträge (${alleEintraegeSortiert.length})
-                        </h6>
-                        <div class="d-flex gap-2">
-                          <!-- Sortierung -->
-                          <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-light sortierung-btn active" data-sort="desc" title="Neueste zuerst">
-                              <i class="bi bi-sort-down"></i>
-                            </button>
-                            <button type="button" class="btn btn-outline-light sortierung-btn" data-sort="asc" title="Älteste zuerst">
-                              <i class="bi bi-sort-up"></i>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <!-- Filter Buttons -->
-                      <div class="d-flex gap-2 flex-wrap mb-3">
-                        <button type="button" class="btn btn-sm btn-outline-secondary filter-btn active" data-filter="alle">
-                          <i class="bi bi-list"></i> Alle <span class="badge bg-secondary">${alleEintraegeSortiert.length}</span>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-success filter-btn" data-filter="urlaub">
-                          <i class="bi bi-calendar-check"></i> Urlaub <span class="badge bg-success">${anzahlNachTyp.urlaub}</span>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger filter-btn" data-filter="krankheit">
-                          <i class="bi bi-bandaid"></i> Krankheit <span class="badge bg-danger">${anzahlNachTyp.krankheit}</span>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-info filter-btn" data-filter="schulung">
-                          <i class="bi bi-book"></i> Schulung <span class="badge bg-info">${anzahlNachTyp.schulung}</span>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-warning filter-btn" data-filter="ueberstunden">
-                          <i class="bi bi-clock"></i> Überstunden <span class="badge bg-warning text-dark">${anzahlNachTyp.ueberstunden}</span>
-                        </button>
-                      </div>
-
-                      <!-- Einträge Container -->
-                      <div id="eintraegeContainer">
-                        ${this._renderAlleEintraege(alleEintraegeSortiert)}
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -786,9 +819,6 @@ class DetailDialog extends DialogBase {
     }
   }
 
-  /**
-   * Bearbeitet einen Urlaubseintrag
-   */
   async _bearbeiteUrlaub(id, mitarbeiterId, vonDatum, bisDatum, callback) {
     const result = await this.dataManager.db.get('SELECT * FROM urlaub WHERE id = ?', [id]);
     if (!result.success || !result.data) {
@@ -878,9 +908,6 @@ class DetailDialog extends DialogBase {
     });
   }
 
-  /**
-   * Bearbeitet einen Krankheitseintrag
-   */
   async _bearbeiteKrankheit(id, mitarbeiterId, vonDatum, bisDatum, callback) {
     const result = await this.dataManager.db.get('SELECT * FROM krankheit WHERE id = ?', [id]);
     if (!result.success || !result.data) {
@@ -970,9 +997,6 @@ class DetailDialog extends DialogBase {
     });
   }
 
-  /**
-   * Bearbeitet einen Schulungseintrag
-   */
   async _bearbeiteSchulung(id, mitarbeiterId, callback) {
     const result = await this.dataManager.db.get('SELECT * FROM schulung WHERE id = ?', [id]);
     if (!result.success || !result.data) {
@@ -1061,9 +1085,6 @@ class DetailDialog extends DialogBase {
     });
   }
 
-  /**
-   * Bearbeitet einen Überstundeneintrag
-   */
   async _bearbeiteUeberstunden(id, mitarbeiterId, callback) {
     const result = await this.dataManager.db.get('SELECT * FROM ueberstunden WHERE id = ?', [id]);
     if (!result.success || !result.data) {
@@ -1274,9 +1295,6 @@ class DetailDialog extends DialogBase {
     return alle;
   }
 
-  /**
-   * Lädt und zeigt das Arbeitszeitmodell an
-   */
   async _ladeUndZeigeArbeitszeitmodell(mitarbeiterId) {
     const container = document.getElementById('arbeitszeitmodellAnzeige');
     if (!container) return;
