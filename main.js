@@ -502,7 +502,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.join(__dirname, 'src/assets/logo.ico'),
+    icon: path.join(__dirname, 'assets/icon.ico'),
     backgroundColor: '#1a1a1a',
     show: false,
     autoHideMenuBar: true // FIX: Blendet die Menüleiste (File, Edit, etc.) aus

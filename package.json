@@ -34,6 +34,7 @@
       "main.js",
       "preload.js",
       "src/**/*",
+       "assets/**/*",
       "node_modules/**/*"
     ],
     "asar": true,
@@ -46,7 +47,7 @@
           ]
         }
       ],
-      "icon": "src/assets/logo.png"
+     "icon": "assets/icon.ico"
     },
     "portable": {
       "artifactName": "TeamPlanner.${ext}"
