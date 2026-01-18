@@ -7,6 +7,7 @@
  * - Tab 1: Stammdaten (Persönliche Daten, Arbeitsbeziehung, Arbeitszeit, Buttons)
  * - Tab 2: Urlaubsplaner (mit Jahresauswahl oben)
  * - Header-Farbe = Abteilungsfarbe
+ * - PDF-Export Buttons schön gestylt
  */
 
 class DetailDialog extends DialogBase {
@@ -16,116 +17,137 @@ class DetailDialog extends DialogBase {
     this.sortierung = 'desc';
     this.herkunft = 'urlaubsplaner'; 
   }
-async _exportMitarbeiterPDF(mitarbeiterId, jahr) {
-  try {
-    // 1. Mitarbeiterdaten laden
-    const mitarbeiter = await window.api.invoke('db:getMitarbeiterById', mitarbeiterId);
-    if (!mitarbeiter) {
-      showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'error');
-      return;
-    }
 
-    // 2. Urlaubsdaten für das Jahr laden
-    const urlaubsdaten = await window.api.invoke('db:getUrlaubByMitarbeiterAndYear', {
-      mitarbeiterId,
-      jahr
-    });
+  /**
+   * Exportiert Mitarbeiter-Details als PDF
+   */
+  async _exportMitarbeiterPDF(mitarbeiterId, jahr) {
+    try {
+      // 1. Mitarbeiterdaten laden
+      const mitarbeiter = await this.dataManager.getMitarbeiter(mitarbeiterId);
+      if (!mitarbeiter) {
+        showNotification('Fehler', 'Mitarbeiter nicht gefunden', 'danger');
+        return;
+      }
 
-    // 3. Abwesenheitsdaten laden (Krankheit, Schulung, Überstunden)
-    const krankheitsdaten = await window.api.invoke('db:getKrankheitByMitarbeiterAndYear', {
-      mitarbeiterId,
-      jahr
-    });
-    
-    const schulungsdaten = await window.api.invoke('db:getSchulungByMitarbeiterAndYear', {
-      mitarbeiterId,
-      jahr
-    });
-    
-    const ueberstundendaten = await window.api.invoke('db:getUeberstundenByMitarbeiterAndYear', {
-      mitarbeiterId,
-      jahr
-    });
+      // 2. Urlaubsdaten für das Jahr laden
+      const urlaubResult = await this.dataManager.db.query(`
+        SELECT von_datum, bis_datum, tage, notiz
+        FROM urlaub
+        WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+        ORDER BY von_datum DESC
+      `, [mitarbeiterId, jahr.toString()]);
+      
+      const urlaubsdaten = urlaubResult.success ? urlaubResult.data : [];
 
-    // 4. Berechne Urlaubsstatistiken
-    const anspruch = mitarbeiter.urlaubstage || 0;
-    const uebertrag = await window.api.invoke('db:getUebertragForYear', {
-      mitarbeiterId,
-      jahr
-    });
-    
-    let genommen = 0;
-    if (urlaubsdaten && urlaubsdaten.length > 0) {
-      genommen = urlaubsdaten.reduce((sum, entry) => sum + (entry.tage || 0), 0);
-    }
-    
-    const verfuegbar = anspruch + (uebertrag || 0);
-    const verbleibend = verfuegbar - genommen;
+      // 3. Krankheitsdaten laden
+      const krankheitResult = await this.dataManager.db.query(`
+        SELECT von_datum, bis_datum, tage, notiz
+        FROM krankheit
+        WHERE mitarbeiter_id = ? AND strftime('%Y', von_datum) = ?
+        ORDER BY von_datum DESC
+      `, [mitarbeiterId, jahr.toString()]);
+      
+      const krankheitsdaten = krankheitResult.success ? krankheitResult.data : [];
 
-    // 5. Formatiere Daten für PDF-Export
-    const exportData = {
-      employee: {
-        name: mitarbeiter.name,
-        department: mitarbeiter.abteilung || 'Keine Abteilung',
-        year: jahr,
-        entitlement: anspruch,
-        carryover: uebertrag || 0,
-        available: verfuegbar,
-        taken: genommen,
-        remaining: verbleibend
-      },
-      vacation: (urlaubsdaten || []).map(entry => ({
-        von: entry.von_datum,
-        bis: entry.bis_datum,
-        tage: entry.tage,
-        notiz: entry.notiz || ''
-      })),
-      absence: [
-        // Krankheitstage
-        ...(krankheitsdaten || []).map(entry => ({
-          typ: 'krankheit',
-          datum: entry.datum,
-          wert: entry.tage,
+      // 4. Schulungsdaten laden
+      const schulungResult = await this.dataManager.db.query(`
+        SELECT datum, dauer_tage, titel, notiz
+        FROM schulung
+        WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+        ORDER BY datum DESC
+      `, [mitarbeiterId, jahr.toString()]);
+      
+      const schulungsdaten = schulungResult.success ? schulungResult.data : [];
+
+      // 5. Überstundendaten laden
+      const ueberstundenResult = await this.dataManager.db.query(`
+        SELECT datum, stunden, notiz
+        FROM ueberstunden
+        WHERE mitarbeiter_id = ? AND strftime('%Y', datum) = ?
+        ORDER BY datum DESC
+      `, [mitarbeiterId, jahr.toString()]);
+      
+      const ueberstundendaten = ueberstundenResult.success ? ueberstundenResult.data : [];
+
+      // 6. Berechne Urlaubsstatistiken
+      const anspruch = mitarbeiter.urlaubstage_jahr || 0;
+      const uebertrag = await this.dataManager.berechneUebertrag(mitarbeiterId, jahr);
+      
+      let genommen = 0;
+      if (urlaubsdaten && urlaubsdaten.length > 0) {
+        genommen = urlaubsdaten.reduce((sum, entry) => sum + (entry.tage || 0), 0);
+      }
+      
+      const verfuegbar = anspruch + uebertrag;
+      const verbleibend = verfuegbar - genommen;
+
+      // 7. Formatiere Daten für PDF-Export
+      const exportData = {
+        employee: {
+          name: `${mitarbeiter.vorname} ${mitarbeiter.nachname}`,
+          department: mitarbeiter.abteilung_name || 'Keine Abteilung',
+          year: jahr,
+          entitlement: anspruch,
+          carryover: uebertrag,
+          available: verfuegbar,
+          taken: genommen,
+          remaining: verbleibend
+        },
+        vacation: urlaubsdaten.map(entry => ({
+          von: entry.von_datum,
+          bis: entry.bis_datum,
+          tage: entry.tage,
           notiz: entry.notiz || ''
         })),
-        // Schulungstage
-        ...(schulungsdaten || []).map(entry => ({
-          typ: 'schulung',
-          datum: entry.datum,
-          wert: entry.tage,
-          notiz: entry.notiz || ''
-        })),
-        // Überstunden
-        ...(ueberstundendaten || []).map(entry => ({
-          typ: 'ueberstunden',
-          datum: entry.datum,
-          wert: entry.stunden,
-          notiz: entry.notiz || ''
-        }))
-      ]
-    };
+        absence: [
+          // Krankheitstage
+          ...krankheitsdaten.map(entry => ({
+            typ: 'krankheit',
+            datum: entry.von_datum,
+            wert: entry.tage,
+            notiz: entry.notiz || ''
+          })),
+          // Schulungstage
+          ...schulungsdaten.map(entry => ({
+            typ: 'schulung',
+            datum: entry.datum,
+            wert: entry.dauer_tage,
+            notiz: entry.notiz || '',
+            titel: entry.titel || ''
+          })),
+          // Überstunden
+          ...ueberstundendaten.map(entry => ({
+            typ: 'ueberstunden',
+            datum: entry.datum,
+            wert: entry.stunden,
+            notiz: entry.notiz || ''
+          }))
+        ]
+      };
 
-    // 6. IPC-Call zum Backend
-    const result = await window.api.invoke('export:employeeDetailPdf', exportData);
-    
-    if (result.success) {
-      showNotification('Erfolg', `PDF erfolgreich erstellt: ${mitarbeiter.name}`, 'success');
-    } else {
-      showNotification('Fehler', `PDF-Export fehlgeschlagen: ${result.error}`, 'error');
+      // 8. IPC-Call zum Backend
+      showNotification('Export', 'PDF wird erstellt...', 'info');
+      const result = await window.electronAPI.exportEmployeeDetailPdf(exportData);
+      
+      if (result.success) {
+        showNotification('Erfolg', `PDF erfolgreich erstellt: ${mitarbeiter.vorname} ${mitarbeiter.nachname}`, 'success');
+      } else {
+        showNotification('Fehler', `PDF-Export fehlgeschlagen: ${result.error}`, 'danger');
+      }
+
+    } catch (error) {
+      console.error('Fehler beim PDF-Export:', error);
+      showNotification('Fehler', `PDF-Export fehlgeschlagen: ${error.message}`, 'danger');
     }
-
-  } catch (error) {
-    console.error('Fehler beim PDF-Export:', error);
-    showNotification('Fehler', 'PDF-Export fehlgeschlagen', 'error');
   }
-}
+
   /**
    * Zeigt Detail-Dialog für einen Mitarbeiter
    */
-async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
-     this.herkunft = herkunft;
-
-      jahr = jahr || this.dataManager.aktuellesJahr;
+  async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
+    this.herkunft = herkunft;
+    jahr = jahr || this.dataManager.aktuellesJahr;
     
     const stat = await this.dataManager.getMitarbeiterStatistik(mitarbeiterId);
     if (!stat) {
@@ -153,52 +175,58 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             
-           <!-- TAB NAVIGATION -->
-<ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link ${herkunft === 'stammdaten' ? 'active' : ''}" 
-            id="stammdaten-tab" 
-            data-bs-toggle="tab" 
-            data-bs-target="#stammdaten" 
-            type="button" 
-            role="tab" 
-            aria-selected="${herkunft === 'stammdaten' ? 'true' : 'false'}">
-      <i class="bi bi-person-badge"></i> Stammdaten
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" 
-            id="urlaub-tab" 
-            data-bs-toggle="tab" 
-            data-bs-target="#urlaub" 
-            type="button" 
-            role="tab" 
-            aria-selected="${herkunft === 'urlaubsplaner' ? 'true' : 'false'}">
-      <i class="bi bi-calendar-check"></i> Urlaubsplaner
-    </button>
-  </li>
-</ul>
+            <!-- TAB NAVIGATION -->
+            <ul class="nav nav-tabs bg-dark px-3" id="detailTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link ${herkunft === 'stammdaten' ? 'active' : ''}" 
+                        id="stammdaten-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#stammdaten" 
+                        type="button" 
+                        role="tab" 
+                        aria-selected="${herkunft === 'stammdaten' ? 'true' : 'false'}">
+                  <i class="bi bi-person-badge"></i> Stammdaten
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link ${herkunft === 'urlaubsplaner' ? 'active' : ''}" 
+                        id="urlaub-tab" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#urlaub" 
+                        type="button" 
+                        role="tab" 
+                        aria-selected="${herkunft === 'urlaubsplaner' ? 'true' : 'false'}">
+                  <i class="bi bi-calendar-check"></i> Urlaubsplaner
+                </button>
+              </li>
+            </ul>
 
             <div class="modal-body p-0">
               <div class="tab-content" id="detailTabContent">
                 
                 <!-- TAB 1: STAMMDATEN -->
-                <div class="tab-pane fade ${herkunft === 'stammdaten' ? 'show active' : ''}" id="stammdaten" role="tabpanel">                  <div class="row g-0" style="height: calc(100vh - 180px);">
+                <div class="tab-pane fade ${herkunft === 'stammdaten' ? 'show active' : ''}" id="stammdaten" role="tabpanel">
+                  <div class="row g-0" style="height: calc(100vh - 180px);">
                     <div class="col-md-12" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-4">
                         
                         <div class="row">
                           <div class="col-md-6">
-                            <!-- Buttons -->
-                            <div class="d-flex gap-2 mb-3">
-                              <button class="btn btn-outline-primary w-100" id="btnMitarbeiterBearbeiten">
-                                <i class="bi bi-pencil"></i> Bearbeiten
-                              </button>
-                              <div class="export-buttons">
-  <button id="btnExportStammdatenPDF" class="btn btn-sm btn-outline-primary">
-    <i class="fas fa-file-pdf"></i> Als PDF exportieren
-  </button>
-</div>
+                            <!-- Aktionen Card -->
+                            <div class="card bg-dark mb-3">
+                              <div class="card-header">
+                                <h6 class="mb-0"><i class="bi bi-gear"></i> Aktionen</h6>
+                              </div>
+                              <div class="card-body p-3">
+                                <div class="d-grid gap-2">
+                                  <button class="btn btn-primary" id="btnMitarbeiterBearbeiten">
+                                    <i class="bi bi-pencil me-2"></i>Stammdaten bearbeiten
+                                  </button>
+                                  <button class="btn btn-outline-danger" id="btnExportStammdatenPDF">
+                                    <i class="bi bi-file-earmark-pdf me-2"></i>Als PDF exportieren
+                                  </button>
+                                </div>
+                              </div>
                             </div>
 
                             <!-- Persönliche Daten -->
@@ -322,11 +350,7 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
                     <!-- LINKE SPALTE: Urlaub & Überstunden -->
                     <div class="col-md-4 border-end" style="overflow-y: auto; background-color: #1a1a1a;">
                       <div class="p-3">
-                        <div class="export-buttons">
-  <button id="btnExportPDF" class="btn btn-sm btn-outline-primary">
-    <i class="fas fa-file-pdf"></i> Als PDF exportieren
-  </button>
-</div>
+                        
                         <!-- Urlaub ${jahr} -->
                         <div class="card bg-dark mb-3">
                           <div class="card-header clickable" id="clickUrlaub" style="cursor: pointer;" title="Klicken um Urlaub einzutragen">
@@ -369,7 +393,7 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
                         </div>
 
                         <!-- Überstunden ${jahr} -->
-                        <div class="card bg-dark">
+                        <div class="card bg-dark mb-3">
                           <div class="card-header clickable" id="clickUeberstunden" style="cursor: pointer;" title="Klicken um Überstunden einzutragen">
                             <div class="d-flex justify-content-between align-items-center">
                               <h6 class="mb-0"><i class="bi bi-clock text-warning"></i> Überstunden ${jahr}</h6>
@@ -400,6 +424,14 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
                               </tr>
                             </table>
                           </div>
+                        </div>
+
+                        <!-- PDF Export Button -->
+                        <div class="export-section">
+                          <button class="btn btn-outline-danger btn-sm w-100" id="btnExportPDF">
+                            <i class="bi bi-file-earmark-pdf-fill me-2"></i>
+                            Urlaubsübersicht exportieren
+                          </button>
                         </div>
 
                       </div>
@@ -557,7 +589,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
     });
   }
 
-
   /**
    * NEU: Initialisiert Jahr-Navigation Buttons
    * FIX: Jahr wird jetzt explizit übergeben statt aus dataManager zu lesen
@@ -597,7 +628,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUrlaubDialog(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -611,7 +641,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUebertragAnpassen(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -625,7 +654,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeKrankDialog(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -639,7 +667,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeSchulungDialog(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -653,7 +680,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeUeberstundenDialog(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -667,7 +693,6 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
@@ -681,27 +706,29 @@ async zeigeDetails(mitarbeiterId, jahr = null, herkunft = 'urlaubsplaner') {
         modal.hide();
         if (typeof dialogManager !== 'undefined') {
           await dialogManager.zeigeArbeitszeitmodell(mitarbeiterId, async () => {
-            // Nach Speichern: Detailansicht wieder öffnen
             setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
           });
         }
       });
     }
 
+    // PDF Export - Stammdaten Tab
     const btnExportStammdatenPDF = modalElement.querySelector('#btnExportStammdatenPDF');
-if (btnExportStammdatenPDF) {
-  btnExportStammdatenPDF.addEventListener('click', async (e) => {
-    e.preventDefault();
-    await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
-  });
-}
-const btnExportPDF = modalElement.querySelector('#btnExportPDF');
-if (btnExportPDF) {
-  btnExportPDF.addEventListener('click', async (e) => {
-    e.preventDefault();
-    await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
-  });
-}
+    if (btnExportStammdatenPDF) {
+      btnExportStammdatenPDF.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
+      });
+    }
+
+    // PDF Export - Urlaubsplaner Tab
+    const btnExportPDF = modalElement.querySelector('#btnExportPDF');
+    if (btnExportPDF) {
+      btnExportPDF.addEventListener('click', async (e) => {
+        e.preventDefault();
+        await this._exportMitarbeiterPDF(mitarbeiterId, jahr);
+      });
+    }
   }
 
   /**

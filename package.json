@@ -1,5 +1,5 @@
 {
-  "name": "urlaubsplanner-electron",
+  "name": "teamplanner",
   "version": "1.0.0",
   "description": "Moderne Desktop-Anwendung zur Verwaltung von Urlaub, Krankheit, Schulungen und Überstunden",
   "main": "main.js",
@@ -8,7 +8,7 @@
     "build": "electron-builder --win"
   },
   "keywords": [
-    "urlaubsplanner",
+    "teamplanner",
     "urlaub",
     "verwaltung"
   ],
@@ -25,8 +25,8 @@
     "bootstrap-icons": "^1.11.2"
   },
   "build": {
-    "appId": "com.urlaubsplanner.app",
-    "productName": "Urlaubsplanner",
+    "appId": "com.teamplanner.app",
+    "productName": "Teamplanner",
     "directories": {
       "output": "dist"
     },
@@ -49,7 +49,7 @@
       "icon": "src/assets/logo.png"
     },
     "portable": {
-      "artifactName": "Urlaubsplanner-Portable.${ext}"
+      "artifactName": "TeamPlanner.${ext}"
     }
   }
 }

@@ -1,16 +1,3 @@
-/**
- * Urlaubsplanner - Electron Main Process
- * Verwaltet Fenster, IPC, Datenbank und Systemintegration
- * 
- * PORTABLE VERSION: Datenbank liegt neben der .exe
- * 
- * NEU: Integrierter Logger (ohne externe Abhängigkeit)
- * NEU: Arbeitszeitmodelle für Mitarbeiter
- * VERBESSERT: Datenbankindizes für Performance
- * VERBESSERT: Security-Fix für fs:writeFile
- * FIX: Menüleiste (File, Edit, etc.) wird ausgeblendet
- */
-
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
