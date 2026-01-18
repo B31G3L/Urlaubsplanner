@@ -452,6 +452,16 @@ function createIndexes() {
   }
 }
 
+
+function getScriptPath(scriptName) {
+    if (app.isPackaged) {
+        // In der gebauten App: process.resourcesPath/scripts/
+        return path.join(process.resourcesPath, 'scripts', scriptName);
+    } else {
+        // Im Development: ./scripts/
+        return path.join(__dirname, 'scripts', scriptName);
+    }
+}
 /**
  * Erstellt Standard-Abteilungen
  */

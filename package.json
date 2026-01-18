@@ -34,8 +34,15 @@
       "main.js",
       "preload.js",
       "src/**/*",
-       "assets/**/*",
+      "assets/**/*",
       "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts",
+        "to": "scripts",
+        "filter": ["**/*"]
+      }
     ],
     "asar": true,
     "win": {
@@ -47,7 +54,7 @@
           ]
         }
       ],
-     "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico"
     },
     "portable": {
       "artifactName": "TeamPlanner.${ext}"
