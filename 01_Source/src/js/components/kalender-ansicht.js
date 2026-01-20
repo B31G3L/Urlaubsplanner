@@ -849,7 +849,7 @@ class KalenderAnsicht {
     if (startWochentag < 0) startWochentag = 6;
 
     const heute = new Date();
-    const heuteStr = heute.toISOString().split('T')[0];
+    const heuteStr = this._formatDatumLokal(heute);
 
     let html = '<div class="kalender-grid">';
 
@@ -942,6 +942,17 @@ class KalenderAnsicht {
     return html;
   }
 
+
+
+  /**
+ * Formatiert Datum lokal ohne UTC-Konvertierung
+ */
+  _formatDatumLokal(date) {
+    const jahr = date.getFullYear();
+    const monat = String(date.getMonth() + 1).padStart(2, '0');
+    const tag = String(date.getDate()).padStart(2, '0');
+    return `${jahr}-${monat}-${tag}`;
+  }
   /**
    * Erstellt die Listenansicht HTML
    */
@@ -950,7 +961,7 @@ class KalenderAnsicht {
     const letzterTag = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
 
     const heute = new Date();
-    const heuteStr = heute.toISOString().split('T')[0];
+    const heuteStr = this._formatDatumLokal(heute);
 
     let html = '<div class="kalender-liste">';
 
@@ -1041,11 +1052,13 @@ class KalenderAnsicht {
    * Gibt Abwesenheiten für einen Tag zurück
    */
   _getAbwesenheitenFuerTag(datumStr) {
-    const datum = new Date(datumStr);
-
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    const datum = new Date(jahr, monat - 1, tag);
     return this.abwesenheiten.filter(a => {
-      const von = new Date(a.von);
-      const bis = new Date(a.bis);
+      const [vonJahr, vonMonat, vonTag] = a.von.split('-').map(Number);
+      const von = new Date(vonJahr, vonMonat - 1, vonTag);
+      const [bisJahr, bisMonat, bisTag] = a.bis.split('-').map(Number);
+      const bis = new Date(bisJahr, bisMonat - 1, bisTag);
       return datum >= von && datum <= bis;
     });
   }
@@ -1054,11 +1067,14 @@ class KalenderAnsicht {
    * Gibt Veranstaltungen für einen Tag zurück
    */
   _getVeranstaltungenFuerTag(datumStr) {
-    const datum = new Date(datumStr);
+    const [jahr, monat, tag] = datumStr.split('-').map(Number);
+    const datum = new Date(jahr, monat - 1, tag);
 
     return this.veranstaltungen.filter(v => {
-      const von = new Date(v.von_datum);
-      const bis = new Date(v.bis_datum);
+      const [vonJahr, vonMonat, vonTag] = v.von_datum.split('-').map(Number);
+      const von = new Date(vonJahr, vonMonat - 1, vonTag);
+      const [bisJahr, bisMonat, bisTag] = v.bis_datum.split('-').map(Number);
+      const bis = new Date(bisJahr, bisMonat - 1, bisTag);
       return datum >= von && datum <= bis;
     });
   }
