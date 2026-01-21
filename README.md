@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/icon.ico" alt="TeamFlow Logo" width="128" height="128">
+  <img src="01_Source/assets/logo.png" alt="TeamFlow Logo" width="128" height="128">
   
   # TeamFlow
   
