@@ -5,6 +5,9 @@
  * FIX: Halbe Tage werden jetzt korrekt als 0.5 Tage angezeigt und gespeichert
  * - Bei Auswahl "Halber Tag": Von-Datum = Bis-Datum, Anzeige = 0.5 Tage
  * - Speicherung erfolgt mit 0.5 Tagen
+ * 
+ * FIX: Kalenderanzeige zeigt jetzt den GESAMTEN Zeitraum an, nicht nur die Arbeitstage
+ * - Beispiel: Mo-Fr bei 4-Tage-Woche (Mo frei) = 5 Tage im Kalender, 4 Tage Urlaubsabzug
  */
 
 class UrlaubDialog extends DialogBase {
@@ -144,7 +147,8 @@ class UrlaubDialog extends DialogBase {
         typ: 'urlaub',
         mitarbeiter_id: mitarbeiterId,
         datum: vonDatum,
-        wert: tage, // FIX: Verwende direkt den angezeigten Wert (0.5 bei halbem Tag)
+        bis_datum: bisDatum, // NEU: Übergebe das tatsächliche Bis-Datum
+        wert: tage, // Die berechneten Urlaubstage (z.B. 4 wenn Montag frei ist)
         beschreibung: document.getElementById('notiz').value || null
       };
 

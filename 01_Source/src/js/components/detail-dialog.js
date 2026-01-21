@@ -724,17 +724,19 @@ class DetailDialog extends DialogBase {
     }
 
     // Mitarbeiter bearbeiten
-    const btnBearbeiten = modalElement.querySelector('#btnMitarbeiterBearbeiten');
-    if (btnBearbeiten) {
-      btnBearbeiten.addEventListener('click', async () => {
-        modal.hide();
-        if (typeof dialogManager !== 'undefined') {
-          await dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
-            setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr), 300);
-          });
-        }
+   // Mitarbeiter bearbeiten
+const btnBearbeiten = modalElement.querySelector('#btnMitarbeiterBearbeiten');
+if (btnBearbeiten) {
+  btnBearbeiten.addEventListener('click', async () => {
+    modal.hide();
+    if (typeof dialogManager !== 'undefined') {
+      await dialogManager.zeigeStammdatenBearbeiten(mitarbeiterId, async () => {
+        // Behalte die ursprüngliche Herkunft beim Zurückkehren
+        setTimeout(() => this.zeigeDetails(mitarbeiterId, jahr, this.herkunft), 300);
       });
     }
+  });
+}
 
     // Arbeitszeitmodell
     const btnArbeitszeitmodell = modalElement.querySelector('#btnArbeitszeitmodell');
